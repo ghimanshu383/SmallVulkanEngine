@@ -56,6 +56,13 @@ namespace rn {
         VkRect2D mScissors{};
 #pragma endregion
 #pragma region Draw
+        std::uint32_t mCurrentImageIndex;
+        List<VkFramebuffer> mFrameBuffers;
+        VkCommandPool mCommandPool;
+        VkCommandBuffer mCommandBuffer;
+        VkSemaphore mGetImageSemaphore;
+        VkSemaphore mPresentImageSemaphore;
+        VkFence mPresentFinishFence;
 #pragma endregion Draw
     public:
         // Functions
@@ -161,6 +168,24 @@ namespace rn {
 #pragma endregion
 #pragma region Draw
 #pragma endregion Draw
+
+        void CreateSemaphoresAndFences();
+
+        void CreateFrameBuffers();
+
+        void CreateCommandPool();
+
+        void AllocateCommandBuffer();
+
+        void BeginCommand(std::uint32_t currentImageIndex);
+
+        void EndCommand();
+
+        void BeginFrame();
+
+        void Draw();
+
+        void EndFrame();
     };
 }
 #endif //SMALLVKENGINE_GRAPHICS_H

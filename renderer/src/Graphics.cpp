@@ -17,12 +17,30 @@ namespace rn {
         CreateSwapChain();
         CreateRenderPass();
         CreatePipeline();
+
+        CreateSemaphoresAndFences();
+        CreateFrameBuffers();
+        CreateCommandPool();
+        AllocateCommandBuffer();
     }
 
     Graphics::~Graphics() {
+        vkDeviceWaitIdle(mDevices.logicalDevice);
+        vkDestroyCommandPool(mDevices.logicalDevice, mCommandPool, nullptr);
+        for (VkFramebuffer framebuffer: mFrameBuffers) {
+            vkDestroyFramebuffer(mDevices.logicalDevice, framebuffer, nullptr);
+        }
+        vkDestroySemaphore(mDevices.logicalDevice, mPresentImageSemaphore, nullptr);
+        vkDestroySemaphore(mDevices.logicalDevice, mGetImageSemaphore, nullptr);
+        vkDestroyFence(mDevices.logicalDevice, mPresentFinishFence, nullptr);
+
+
         for (VkImageView imageView: mSwapChainImageViews) {
             vkDestroyImageView(mDevices.logicalDevice, imageView, nullptr);
         }
+        vkDestroyPipeline(mDevices.logicalDevice, mPipeline, nullptr);
+        vkDestroyPipelineLayout(mDevices.logicalDevice, mPipelineLayout, nullptr);
+        vkDestroyRenderPass(mDevices.logicalDevice, mRenderPass, nullptr);
         vkDestroySwapchainKHR(mDevices.logicalDevice, mSwapChain, nullptr);
         vkDestroyDevice(mDevices.logicalDevice, nullptr);
         vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
@@ -384,9 +402,9 @@ namespace rn {
 
     void Graphics::CreateRenderPass() {
         VkAttachmentDescription colorImageAttachmentDescription{};
-        colorImageAttachmentDescription.format = VK_FORMAT_R8G8B8A8_SNORM;
+        colorImageAttachmentDescription.format = mSurfaceFormat.format;
         colorImageAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorImageAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorImageAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         colorImageAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorImageAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorImageAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -523,6 +541,137 @@ namespace rn {
         CheckVulkanError(
                 vkCreateGraphicsPipelines(mDevices.logicalDevice, nullptr, 1, &pipelineCreateInfo, nullptr, &mPipeline),
                 "Failed to create the pipeline");
+        vkDestroyShaderModule(mDevices.logicalDevice, vertexShaderModule, nullptr);
+        vkDestroyShaderModule(mDevices.logicalDevice, fragmentShaderModule, nullptr);
+    }
+
+#pragma endregion
+#pragma region Draw
+
+    void Graphics::CreateSemaphoresAndFences() {
+        VkSemaphoreCreateInfo getImageSemaphoreCreateInfo{};
+        getImageSemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkSemaphoreCreateInfo presentImageSemaphoreCreateInfo{};
+        presentImageSemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkFenceCreateInfo presentImageFenceCreateInfo{};
+        presentImageFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        presentImageFenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        CheckVulkanError(
+                vkCreateSemaphore(mDevices.logicalDevice, &getImageSemaphoreCreateInfo, nullptr, &mGetImageSemaphore),
+                "Failed to create the wait get image semaphore");
+        CheckVulkanError(vkCreateSemaphore(mDevices.logicalDevice, &presentImageSemaphoreCreateInfo, nullptr,
+                                           &mPresentImageSemaphore), "Failed to create the present Image semaphore");
+        CheckVulkanError(
+                vkCreateFence(mDevices.logicalDevice, &presentImageFenceCreateInfo, nullptr, &mPresentFinishFence),
+                "Failed to create the fence for the present Image");
+
+    }
+
+    void Graphics::CreateFrameBuffers() {
+        mFrameBuffers.resize(mSwapChainImageViews.size());
+        for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+            VkFramebufferCreateInfo framebufferCreateInfo{};
+            framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferCreateInfo.renderPass = mRenderPass;
+            framebufferCreateInfo.width = mWindowExtent.width;
+            framebufferCreateInfo.height = mWindowExtent.height;
+            framebufferCreateInfo.attachmentCount = 1;
+            framebufferCreateInfo.pAttachments = &mSwapChainImageViews[i];
+            framebufferCreateInfo.layers = 1;
+
+            CheckVulkanError(
+                    vkCreateFramebuffer(mDevices.logicalDevice, &framebufferCreateInfo, nullptr, &mFrameBuffers[i]),
+                    "Failed to create the frame buffer for the image view");
+        }
+    }
+
+    void Graphics::CreateCommandPool() {
+        VkCommandPoolCreateInfo commandPoolCreateInfo{};
+        commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        commandPoolCreateInfo.queueFamilyIndex = mQueueFamily.graphicsQueueIndex.value();
+        commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+        CheckVulkanError(vkCreateCommandPool(mDevices.logicalDevice, &commandPoolCreateInfo, nullptr, &mCommandPool),
+                         "Failed to create the graphics queue command Pool");
+
+    }
+
+    void Graphics::AllocateCommandBuffer() {
+        VkCommandBufferAllocateInfo allocateInfo{};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocateInfo.commandPool = mCommandPool;
+        allocateInfo.commandBufferCount = 1;
+        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+        CheckVulkanError(vkAllocateCommandBuffers(mDevices.logicalDevice, &allocateInfo, &mCommandBuffer),
+                         "Failed to allocate the command buffer");
+    }
+
+    void Graphics::BeginCommand(std::uint32_t currentImageIndex) {
+        vkResetCommandBuffer(mCommandBuffer, 0);
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        vkBeginCommandBuffer(mCommandBuffer, &beginInfo);
+
+        VkRenderPassBeginInfo renderPassBeginInfo{};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass = mRenderPass;
+        renderPassBeginInfo.framebuffer = mFrameBuffers[currentImageIndex];
+        renderPassBeginInfo.renderArea.offset = {0, 0};
+        renderPassBeginInfo.renderArea.extent = mWindowExtent;
+        renderPassBeginInfo.clearValueCount = 1;
+        VkClearValue clearValue = {{{.2f, .2f, .2f}}};
+        renderPassBeginInfo.pClearValues = &clearValue;
+
+        vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
+        vkCmdSetViewport(mCommandBuffer, 0, 1, &mViewport);
+        vkCmdSetScissor(mCommandBuffer, 0, 1, &mScissors);
+    }
+
+    void Graphics::EndCommand() {
+        vkCmdEndRenderPass(mCommandBuffer);
+        CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the graphics command buffer");
+    }
+
+    void Graphics::BeginFrame() {
+        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
+        vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
+        vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore, nullptr,
+                              &mCurrentImageIndex);
+        BeginCommand(mCurrentImageIndex);
+    }
+
+    void Graphics::Draw() {
+        vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
+    }
+
+    void Graphics::EndFrame() {
+        EndCommand();
+        VkSubmitInfo commandSubmitInfo{};
+        VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        commandSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        commandSubmitInfo.commandBufferCount = 1;
+        commandSubmitInfo.pCommandBuffers = &mCommandBuffer;
+        commandSubmitInfo.waitSemaphoreCount = 1;
+        commandSubmitInfo.pWaitSemaphores = &mGetImageSemaphore;
+        commandSubmitInfo.signalSemaphoreCount = 1;
+        commandSubmitInfo.pSignalSemaphores = &mPresentImageSemaphore;
+        commandSubmitInfo.pWaitDstStageMask = &stageFlags;
+
+        CheckVulkanError(vkQueueSubmit(mGraphicsQueue, 1, &commandSubmitInfo, mPresentFinishFence),
+                         "Failed to submit the command to the queue");
+
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &mPresentImageSemaphore;
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = &mSwapChain;
+        presentInfo.pImageIndices = &mCurrentImageIndex;
+
+        vkQueuePresentKHR(mPresentationQueue, &presentInfo);
     }
 
 #pragma endregion

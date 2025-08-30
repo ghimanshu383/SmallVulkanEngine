@@ -37,6 +37,9 @@ namespace vk {
     void MainWindow::RenderWindow() {
         while (!glfwWindowShouldClose(mWindow)) {
             glfwPollEvents();
+            mGraphics->BeginFrame();
+            mGraphics->Draw();
+            mGraphics->EndFrame();
         }
         delete mGraphics;
     }
