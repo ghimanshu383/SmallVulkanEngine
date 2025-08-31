@@ -10,10 +10,14 @@
 #include "Graphics.h"
 
 namespace vk {
+    class Scene;
+
     class MainWindow {
     private:
         GLFWwindow *mWindow;
         rn::Graphics *mGraphics = nullptr;
+        rn::RendererContext mCtx;
+        Scene *mDefaultScene;
 
         void Init(int width, int height, const char *title);
 
@@ -23,6 +27,8 @@ namespace vk {
         ~MainWindow();
 
         void RenderWindow();
+
+        Scene *GetDefaultScene() const { return mDefaultScene; }
 
     };
 }

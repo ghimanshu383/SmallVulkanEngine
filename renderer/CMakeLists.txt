@@ -3,6 +3,9 @@ add_library(${RENDERER} STATIC
         src/Graphics.cpp
         include/precomp.h
         include/Utility.h
+        include/StaticMesh.h
+        src/StaticMesh.cpp
+        src/Utility.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

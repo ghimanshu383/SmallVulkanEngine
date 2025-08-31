@@ -4,6 +4,14 @@ add_executable(${ENGINE}
         src/EntryPoint.cpp
         include/Constants.h
         src/Constants.cpp
+        include/Components/Component.h
+        src/Components/Component.cpp
+        include/Entity/GameObject.h
+        src/Entity/GameObject.cpp
+        include/Components/MeshComponent.h
+        include/Entity/Scene.h
+        src/Entity/Scene.cpp
+        src/Components/MeshComponent.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC

@@ -8,6 +8,8 @@
 #include "precomp.h"
 
 namespace vk {
+    template<typename T>
+    using List = std::vector<T>;
     class Constants {
     public:
         static std::uint32_t WINDOW_WIDTH;

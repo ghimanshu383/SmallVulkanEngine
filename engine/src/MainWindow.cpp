@@ -4,6 +4,9 @@
 
 #include "MainWindow.h"
 #include "Utility.h"
+#include "Components/MeshComponent.h"
+#include "Entity/Scene.h"
+#include "Entity/GameObject.h"
 
 namespace vk {
     MainWindow::MainWindow(int width, int height, const char *title) {
@@ -31,7 +34,20 @@ namespace vk {
             glfwTerminate();
             std::exit(EXIT_FAILURE);
         }
+
         mGraphics = new rn::Graphics(mWindow);
+        mDefaultScene = new Scene{&mCtx};
+        mCtx = mGraphics->GetRendererContext();
+        List<rn::Vertex> vertOne = {{glm::vec3{0, -1, 0},   {1, 0, 0, 1}},
+                                    {glm::vec3{-0.5, 0, 0}, {0, 1, 0, 1}},
+                                    {glm::vec3{0.5, 0, 0},  {0, 0, 1, 1}}};
+        List<std::uint32_t> indices = {0, 1, 2};
+        std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>();
+
+        std::string meshName = "Triangle Mesh";
+        testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices);
+
+        mDefaultScene->BeginPlay();
     }
 
     void MainWindow::RenderWindow() {

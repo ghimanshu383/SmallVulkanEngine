@@ -1,0 +1,29 @@
+//
+// Created by ghima on 30-08-2025.
+//
+#include "StaticMesh.h"
+
+namespace rn {
+    StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices)
+            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices} {
+        mIndicesCount = indices.size();
+        Init();
+    }
+
+    void StaticMesh::Init() {
+        // Creating the vertex buffers;
+        CreateMeshBuffer<Vertex>(mVertList, (VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
+                                 mVertexBuffer, mVertexBufferMemory, "VertexBuffer");
+        // Creating the indices mesh
+        CreateMeshBuffer<std::uint32_t>(mIndicesList,
+                                        (VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+                                        mIndexBuffer, mIndexBufferMemory, "IndexBuffer");
+    }
+
+    StaticMesh::~StaticMesh() {
+        vkDestroyBuffer(mRenderContext.logicalDevice, mVertexBuffer, nullptr);
+        vkDestroyBuffer(mRenderContext.logicalDevice, mIndexBuffer, nullptr);
+        vkFreeMemory(mRenderContext.logicalDevice, mVertexBufferMemory, nullptr);
+        vkFreeMemory(mRenderContext.logicalDevice, mIndexBufferMemory, nullptr);
+    }
+}

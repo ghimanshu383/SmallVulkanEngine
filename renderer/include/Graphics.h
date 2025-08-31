@@ -12,6 +12,7 @@ namespace rn {
         // Instances
 #pragma region Common
         GLFWwindow *mRenderWindow;
+        RendererContext mRendererContext;
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -63,6 +64,7 @@ namespace rn {
         VkSemaphore mGetImageSemaphore;
         VkSemaphore mPresentImageSemaphore;
         VkFence mPresentFinishFence;
+        static Map<std::string, class StaticMesh *, std::hash<std::string>> meshObjectList;
 #pragma endregion Draw
     public:
         // Functions
@@ -74,25 +76,39 @@ namespace rn {
 
         ~Graphics();
 
-        void CheckVulkanError(VkResult result, const char *message);
-
         template<typename T>
         void CheckAvailability(List<const char *> &required, List<T> &available, bool(*callback)(const char *, T)) {
-            bool isAvailable = std::all_of(required.begin(), required.end(),
-                                           [callback, &available](const char *entryRequired) -> bool {
-                                               bool isEntryAvailable = std::any_of(available.begin(), available.end(),
-                                                                                   [callback, entryRequired](
-                                                                                           T entryAvailable) -> bool {
-                                                                                       return (*callback)(entryRequired,
-                                                                                                          entryAvailable);
-                                                                                   });
-                                               if (!isEntryAvailable) {
-                                                   LOG_ERROR("ERROR VK_GRAPHICS : Entry Unavailable %s", entryRequired);
-                                                   std::exit(EXIT_FAILURE);
-                                               }
-                                               return isEntryAvailable;
-                                           });
+            std::all_of(required.begin(), required.end(),
+                        [callback, &available](const char *entryRequired) -> bool {
+                            bool isEntryAvailable = std::any_of(available.begin(), available.end(),
+                                                                [callback, entryRequired](
+                                                                        T entryAvailable) -> bool {
+                                                                    return (*callback)(entryRequired,
+                                                                                       entryAvailable);
+                                                                });
+                            if (!isEntryAvailable) {
+                                LOG_ERROR("ERROR VK_GRAPHICS : Entry Unavailable %s", entryRequired);
+                                std::exit(EXIT_FAILURE);
+                            }
+                            return isEntryAvailable;
+                        });
         }
+
+        void SetRendererContext() {
+            mRendererContext.physicalDevice = mDevices.physicalDevice;
+            mRendererContext.logicalDevice = mDevices.logicalDevice;
+            mRendererContext.commandPool = mCommandPool;
+            mRendererContext.graphicsQueue = mGraphicsQueue;
+            mRendererContext.presentationQueue = mPresentationQueue;
+            mRendererContext.RegisterMesh = &RegisterMeshObject;
+
+        }
+
+        static void RegisterMeshObject(std::string &id, class StaticMesh *meshObject) {
+            meshObjectList.insert({id, meshObject});
+        }
+
+        const RendererContext &GetRendererContext() const { return mRendererContext; };
 
 #pragma endregion
 #pragma region Instance_and_Validations

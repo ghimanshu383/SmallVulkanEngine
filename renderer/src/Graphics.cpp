@@ -2,9 +2,11 @@
 // Created by ghima on 27-08-2025.
 //
 #include "Graphics.h"
+#include "StaticMesh.h"
 
 namespace rn {
 #pragma region Common
+    Map<std::string, StaticMesh *, std::hash<std::string>> Graphics::meshObjectList = {};
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -22,10 +24,17 @@ namespace rn {
         CreateFrameBuffers();
         CreateCommandPool();
         AllocateCommandBuffer();
+        SetRendererContext();
     }
 
     Graphics::~Graphics() {
         vkDeviceWaitIdle(mDevices.logicalDevice);
+        Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
+        while (iter != meshObjectList.end()) {
+            StaticMesh *mesh = iter->second;
+            iter = meshObjectList.erase(iter);
+            delete mesh;
+        }
         vkDestroyCommandPool(mDevices.logicalDevice, mCommandPool, nullptr);
         for (VkFramebuffer framebuffer: mFrameBuffers) {
             vkDestroyFramebuffer(mDevices.logicalDevice, framebuffer, nullptr);
@@ -45,13 +54,6 @@ namespace rn {
         vkDestroyDevice(mDevices.logicalDevice, nullptr);
         vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
         vkDestroyInstance(mInstance, nullptr);
-    }
-
-    void Graphics::CheckVulkanError(VkResult result, const char *message) {
-        if (result != VK_SUCCESS) {
-            LOG_ERROR("VULKAN GRAPHICS ERROR : %s", message);
-            std::exit(EXIT_FAILURE);
-        }
     }
 
 #pragma endregion
@@ -103,8 +105,8 @@ namespace rn {
         VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoExt = CreateDebugMessenger();
         instanceCreateInfo.pNext = &debugUtilsMessengerCreateInfoExt;
 
-        CheckVulkanError(vkCreateInstance(&instanceCreateInfo, nullptr, &mInstance),
-                         "Failed to create the vulkan instance");
+        Utility::CheckVulkanError(vkCreateInstance(&instanceCreateInfo, nullptr, &mInstance),
+                                  "Failed to create the vulkan instance");
 
     }
 
@@ -231,8 +233,8 @@ namespace rn {
         deviceFeatures.samplerAnisotropy = VK_TRUE;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
-        CheckVulkanError(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevices.logicalDevice),
-                         "Failed to create the logical device from the physical device");
+        Utility::CheckVulkanError(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevices.logicalDevice),
+                                  "Failed to create the logical device from the physical device");
         vkGetDeviceQueue(mDevices.logicalDevice, mQueueFamily.graphicsQueueIndex.value(), 0, &mGraphicsQueue);
         vkGetDeviceQueue(mDevices.logicalDevice, mQueueFamily.presentationQueueIndex.value(), 0, &mPresentationQueue);
 
@@ -250,8 +252,8 @@ namespace rn {
 #pragma region Surface_and_Swapchain
 
     void Graphics::GetWindowSurface() {
-        CheckVulkanError(glfwCreateWindowSurface(mInstance, mRenderWindow, nullptr, &mSurface),
-                         "Failed to create the surface for the Rendering window");
+        Utility::CheckVulkanError(glfwCreateWindowSurface(mInstance, mRenderWindow, nullptr, &mSurface),
+                                  "Failed to create the surface for the Rendering window");
     }
 
     void Graphics::GetSurfaceCapabilities() {
@@ -332,8 +334,8 @@ namespace rn {
         imageViewCreateInfo.subresourceRange.levelCount = 1;
         imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 
-        CheckVulkanError(vkCreateImageView(mDevices.logicalDevice, &imageViewCreateInfo, nullptr, &imageView),
-                         "Failed to create the image View");
+        Utility::CheckVulkanError(vkCreateImageView(mDevices.logicalDevice, &imageViewCreateInfo, nullptr, &imageView),
+                                  "Failed to create the image View");
     }
 
     void Graphics::CreateSwapChain() {
@@ -366,8 +368,9 @@ namespace rn {
         } else {
             swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
-        CheckVulkanError(vkCreateSwapchainKHR(mDevices.logicalDevice, &swapchainCreateInfo, nullptr, &mSwapChain),
-                         "Failed to create the swap chain");
+        Utility::CheckVulkanError(
+                vkCreateSwapchainKHR(mDevices.logicalDevice, &swapchainCreateInfo, nullptr, &mSwapChain),
+                "Failed to create the swap chain");
         std::uint32_t swapchainImageCount{};
         vkGetSwapchainImagesKHR(mDevices.logicalDevice, mSwapChain, &swapchainImageCount, nullptr);
         mSwapChainImages.resize(swapchainImageCount);
@@ -395,8 +398,8 @@ namespace rn {
         moduleCreateInfo.codeSize = moduleCode.size();
         moduleCreateInfo.pCode = reinterpret_cast<std::uint32_t *>(moduleCode.data());
 
-        CheckVulkanError(vkCreateShaderModule(mDevices.logicalDevice, &moduleCreateInfo, nullptr, &module),
-                         "Failed to create the Shader Module");
+        Utility::CheckVulkanError(vkCreateShaderModule(mDevices.logicalDevice, &moduleCreateInfo, nullptr, &module),
+                                  "Failed to create the Shader Module");
         return module;
     }
 
@@ -431,8 +434,9 @@ namespace rn {
         renderPassCreateInfo.pSubpasses = subPass.data();
 
         // Create the Render Pass
-        CheckVulkanError(vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mRenderPass),
-                         "Failed to create the Render Pass");
+        Utility::CheckVulkanError(
+                vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mRenderPass),
+                "Failed to create the Render Pass");
 
     }
 
@@ -480,8 +484,32 @@ namespace rn {
         viewportStateCreateInfo.scissorCount = 1;
         viewportStateCreateInfo.pScissors = &mScissors;
 
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.binding = 0;
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        VkVertexInputAttributeDescription positionAttribute{};
+        positionAttribute.binding = 0;
+        positionAttribute.location = 0;
+        positionAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+        positionAttribute.offset = offsetof(Vertex, pos);
+
+        VkVertexInputAttributeDescription colorAttribute{};
+        colorAttribute.binding = 0;
+        colorAttribute.location = 1;
+        colorAttribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        colorAttribute.offset = offsetof(Vertex, color);
+
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{
+                positionAttribute, colorAttribute
+        };
         VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{};
         vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
+        vertexInputStateCreateInfo.pVertexBindingDescriptions = &bindingDescription;
+        vertexInputStateCreateInfo.vertexAttributeDescriptionCount = attributeDescriptions.size();
+        vertexInputStateCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{};
@@ -519,8 +547,9 @@ namespace rn {
         VkPipelineLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 
-        CheckVulkanError(vkCreatePipelineLayout(mDevices.logicalDevice, &layoutCreateInfo, nullptr, &mPipelineLayout),
-                         "Failed to create the layout for the pipeline");
+        Utility::CheckVulkanError(
+                vkCreatePipelineLayout(mDevices.logicalDevice, &layoutCreateInfo, nullptr, &mPipelineLayout),
+                "Failed to create the layout for the pipeline");
 
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
@@ -538,7 +567,7 @@ namespace rn {
         pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
         pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 
-        CheckVulkanError(
+        Utility::CheckVulkanError(
                 vkCreateGraphicsPipelines(mDevices.logicalDevice, nullptr, 1, &pipelineCreateInfo, nullptr, &mPipeline),
                 "Failed to create the pipeline");
         vkDestroyShaderModule(mDevices.logicalDevice, vertexShaderModule, nullptr);
@@ -557,12 +586,13 @@ namespace rn {
         presentImageFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         presentImageFenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        CheckVulkanError(
+        Utility::CheckVulkanError(
                 vkCreateSemaphore(mDevices.logicalDevice, &getImageSemaphoreCreateInfo, nullptr, &mGetImageSemaphore),
                 "Failed to create the wait get image semaphore");
-        CheckVulkanError(vkCreateSemaphore(mDevices.logicalDevice, &presentImageSemaphoreCreateInfo, nullptr,
-                                           &mPresentImageSemaphore), "Failed to create the present Image semaphore");
-        CheckVulkanError(
+        Utility::CheckVulkanError(vkCreateSemaphore(mDevices.logicalDevice, &presentImageSemaphoreCreateInfo, nullptr,
+                                                    &mPresentImageSemaphore),
+                                  "Failed to create the present Image semaphore");
+        Utility::CheckVulkanError(
                 vkCreateFence(mDevices.logicalDevice, &presentImageFenceCreateInfo, nullptr, &mPresentFinishFence),
                 "Failed to create the fence for the present Image");
 
@@ -580,7 +610,7 @@ namespace rn {
             framebufferCreateInfo.pAttachments = &mSwapChainImageViews[i];
             framebufferCreateInfo.layers = 1;
 
-            CheckVulkanError(
+            Utility::CheckVulkanError(
                     vkCreateFramebuffer(mDevices.logicalDevice, &framebufferCreateInfo, nullptr, &mFrameBuffers[i]),
                     "Failed to create the frame buffer for the image view");
         }
@@ -592,8 +622,9 @@ namespace rn {
         commandPoolCreateInfo.queueFamilyIndex = mQueueFamily.graphicsQueueIndex.value();
         commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-        CheckVulkanError(vkCreateCommandPool(mDevices.logicalDevice, &commandPoolCreateInfo, nullptr, &mCommandPool),
-                         "Failed to create the graphics queue command Pool");
+        Utility::CheckVulkanError(
+                vkCreateCommandPool(mDevices.logicalDevice, &commandPoolCreateInfo, nullptr, &mCommandPool),
+                "Failed to create the graphics queue command Pool");
 
     }
 
@@ -604,8 +635,8 @@ namespace rn {
         allocateInfo.commandBufferCount = 1;
         allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
-        CheckVulkanError(vkAllocateCommandBuffers(mDevices.logicalDevice, &allocateInfo, &mCommandBuffer),
-                         "Failed to allocate the command buffer");
+        Utility::CheckVulkanError(vkAllocateCommandBuffers(mDevices.logicalDevice, &allocateInfo, &mCommandBuffer),
+                                  "Failed to allocate the command buffer");
     }
 
     void Graphics::BeginCommand(std::uint32_t currentImageIndex) {
@@ -632,7 +663,7 @@ namespace rn {
 
     void Graphics::EndCommand() {
         vkCmdEndRenderPass(mCommandBuffer);
-        CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the graphics command buffer");
+        Utility::CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the graphics command buffer");
     }
 
     void Graphics::BeginFrame() {
@@ -644,7 +675,18 @@ namespace rn {
     }
 
     void Graphics::Draw() {
-        vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
+        //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
+        auto iter = meshObjectList.begin();
+        while (iter != meshObjectList.end()) {
+            VkBuffer vertexBuffer = iter->second->GetVertexBuffer();
+            VkBuffer indexBuffer = iter->second->GetIndexBuffer();
+
+            VkDeviceSize offset = {0};
+            vkCmdBindVertexBuffers(mCommandBuffer, 0, 1, &vertexBuffer, &offset);
+            vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
+            iter++;
+        }
     }
 
     void Graphics::EndFrame() {
@@ -660,8 +702,8 @@ namespace rn {
         commandSubmitInfo.pSignalSemaphores = &mPresentImageSemaphore;
         commandSubmitInfo.pWaitDstStageMask = &stageFlags;
 
-        CheckVulkanError(vkQueueSubmit(mGraphicsQueue, 1, &commandSubmitInfo, mPresentFinishFence),
-                         "Failed to submit the command to the queue");
+        Utility::CheckVulkanError(vkQueueSubmit(mGraphicsQueue, 1, &commandSubmitInfo, mPresentFinishFence),
+                                  "Failed to submit the command to the queue");
 
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
