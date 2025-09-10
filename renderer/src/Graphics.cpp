@@ -3,10 +3,15 @@
 //
 #include "Graphics.h"
 #include "StaticMesh.h"
+#include "Texture.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_vulkan.h"
 
 namespace rn {
 #pragma region Common
     Map<std::string, StaticMesh *, std::hash<std::string>> Graphics::meshObjectList = {};
+    Map<std::string, Texture *, std::hash<std::string>> Graphics::mTextureMap = {};
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -17,23 +22,52 @@ namespace rn {
         GetWindowSurface();
         PickPhysicalDeviceAndCreateLogicalDevice();
         CreateSwapChain();
+        CreateDepthBufferImages();
         CreateRenderPass();
         CreatePipeline();
-
         CreateSemaphoresAndFences();
         CreateFrameBuffers();
         CreateCommandPool();
         AllocateCommandBuffer();
         SetRendererContext();
+        Imgui_vulkan_init();
+
+        // Setting up the view and projection matrix descriptor sets
+        CreateViewProjectionUniformBuffers();
+
+        CreateDescriptorPool();
+        AllocateDescriptorSets();
+        CreateDefaultTexture(R"(D:\cProjects\SmallVkEngine\textures\brick.png)");
+
     }
 
     Graphics::~Graphics() {
         vkDeviceWaitIdle(mDevices.logicalDevice);
+
+        for (size_t i = 0; i < mViewProjectionBuffers.size(); i++) {
+            vkDestroyBuffer(mDevices.logicalDevice, mViewProjectionBuffers[i], nullptr);
+            vkFreeMemory(mDevices.logicalDevice, mViewProjectionMemory[i], nullptr);
+        }
+        auto textureIter = mTextureMap.begin();
+        while (textureIter != mTextureMap.end()) {
+            Texture *texture = textureIter->second;
+            delete texture;
+            textureIter++;
+        }
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mViewProjectionDescriptorPool, nullptr);
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mSamplerDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mViewProjectionDescriptorSetLayout, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mSamplerDescriptorLayout, nullptr);
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mImguiDescriptorPool, nullptr);
+
         Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
             StaticMesh *mesh = iter->second;
-            iter = meshObjectList.erase(iter);
             delete mesh;
+            iter++;
         }
         vkDestroyCommandPool(mDevices.logicalDevice, mCommandPool, nullptr);
         for (VkFramebuffer framebuffer: mFrameBuffers) {
@@ -44,10 +78,14 @@ namespace rn {
         vkDestroyFence(mDevices.logicalDevice, mPresentFinishFence, nullptr);
 
 
-        for (VkImageView imageView: mSwapChainImageViews) {
-            vkDestroyImageView(mDevices.logicalDevice, imageView, nullptr);
+        for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+            vkDestroyImageView(mDevices.logicalDevice, mSwapChainImageViews[i], nullptr);
+            vkDestroyImageView(mDevices.logicalDevice, mDepthBufferImageViews[i], nullptr);
+            vkDestroyImage(mDevices.logicalDevice, mDepthBufferImages[i], nullptr);
+            vkFreeMemory(mDevices.logicalDevice, mDepthBufferImageMemory[i], nullptr);
         }
         vkDestroyPipeline(mDevices.logicalDevice, mPipeline, nullptr);
+        vkDestroySampler(mDevices.logicalDevice, mTextureSampler, nullptr);
         vkDestroyPipelineLayout(mDevices.logicalDevice, mPipelineLayout, nullptr);
         vkDestroyRenderPass(mDevices.logicalDevice, mRenderPass, nullptr);
         vkDestroySwapchainKHR(mDevices.logicalDevice, mSwapChain, nullptr);
@@ -318,25 +356,6 @@ namespace rn {
         return actualExtent;
     }
 
-    void Graphics::CreateImageView(VkImage &image, VkImageView &imageView, VkImageAspectFlags imageAspect) {
-        VkImageViewCreateInfo imageViewCreateInfo{};
-        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewCreateInfo.format = mSurfaceFormat.format;
-        imageViewCreateInfo.image = image;
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.subresourceRange.aspectMask = imageAspect;
-        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-        imageViewCreateInfo.subresourceRange.layerCount = 1;
-        imageViewCreateInfo.subresourceRange.levelCount = 1;
-        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-
-        Utility::CheckVulkanError(vkCreateImageView(mDevices.logicalDevice, &imageViewCreateInfo, nullptr, &imageView),
-                                  "Failed to create the image View");
-    }
 
     void Graphics::CreateSwapChain() {
         GetSurfaceCapabilities();
@@ -380,7 +399,8 @@ namespace rn {
         mSwapChainImageViews.resize(swapchainImageCount);
         List<VkImageView>::iterator iter = mSwapChainImageViews.begin();
         for (VkImage image: mSwapChainImages) {
-            CreateImageView(image, (*iter), VK_IMAGE_ASPECT_COLOR_BIT);
+            Utility::CreateImageView(mDevices.logicalDevice, image, mSurfaceFormat.format, (*iter),
+                                     VK_IMAGE_ASPECT_COLOR_BIT);
             iter++;
         }
     }
@@ -414,17 +434,33 @@ namespace rn {
         colorImageAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorImageAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
 
+        VkAttachmentDescription depthAttachmentDescription{};
+        depthAttachmentDescription.format = mDepthBufferFormat;
+        depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
+
         // Create the reference for the image attachment for the subpass;
         VkAttachmentReference colorAttachmentReference{};
         colorAttachmentReference.attachment = 0;
         colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentReference depthAttachmentRef{};
+        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpassDescriptionOne{};
         subpassDescriptionOne.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpassDescriptionOne.colorAttachmentCount = 1;
         subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
+        subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
 
-        std::array<VkAttachmentDescription, 1> attachments{colorImageAttachmentDescription};
+        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription, depthAttachmentDescription};
         std::array<VkSubpassDescription, 1> subPass{subpassDescriptionOne};
         VkRenderPassCreateInfo renderPassCreateInfo{};
         renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -501,8 +537,14 @@ namespace rn {
         colorAttribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         colorAttribute.offset = offsetof(Vertex, color);
 
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{
-                positionAttribute, colorAttribute
+        VkVertexInputAttributeDescription textureCoordsInputAttribute{};
+        textureCoordsInputAttribute.binding = 0;
+        textureCoordsInputAttribute.location = 2;
+        textureCoordsInputAttribute.format = VK_FORMAT_R32G32_SFLOAT;
+        textureCoordsInputAttribute.offset = offsetof(Vertex, uv);
+
+        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{
+                positionAttribute, colorAttribute, textureCoordsInputAttribute
         };
         VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{};
         vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -527,6 +569,14 @@ namespace rn {
         rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rasterizationStateCreateInfo.lineWidth = 1.0f;
 
+        VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{};
+        depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencilStateCreateInfo.depthTestEnable = VK_TRUE;
+        depthStencilStateCreateInfo.depthWriteEnable = VK_TRUE;
+        depthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+        depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
+        depthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
+
         VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo{};
         pipelineMultisampleStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         pipelineMultisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
@@ -544,8 +594,14 @@ namespace rn {
         colorBlendStateCreateInfo.attachmentCount = 1;
         colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
 
+        CreateDescriptorLayouts();
+        CreateTextureDefaultSampler();
+
+        List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout};
         VkPipelineLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutCreateInfo.setLayoutCount = setLayouts.size();
+        layoutCreateInfo.pSetLayouts = setLayouts.data();
 
         Utility::CheckVulkanError(
                 vkCreatePipelineLayout(mDevices.logicalDevice, &layoutCreateInfo, nullptr, &mPipelineLayout),
@@ -565,6 +621,7 @@ namespace rn {
         pipelineCreateInfo.pMultisampleState = &pipelineMultisampleStateCreateInfo;
         pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
         pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
+        pipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
         pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 
         Utility::CheckVulkanError(
@@ -601,13 +658,14 @@ namespace rn {
     void Graphics::CreateFrameBuffers() {
         mFrameBuffers.resize(mSwapChainImageViews.size());
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+            std::array<VkImageView, 2> attachments{mSwapChainImageViews[i], mDepthBufferImageViews[i]};
             VkFramebufferCreateInfo framebufferCreateInfo{};
             framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferCreateInfo.renderPass = mRenderPass;
             framebufferCreateInfo.width = mWindowExtent.width;
             framebufferCreateInfo.height = mWindowExtent.height;
-            framebufferCreateInfo.attachmentCount = 1;
-            framebufferCreateInfo.pAttachments = &mSwapChainImageViews[i];
+            framebufferCreateInfo.attachmentCount = attachments.size();
+            framebufferCreateInfo.pAttachments = attachments.data();
             framebufferCreateInfo.layers = 1;
 
             Utility::CheckVulkanError(
@@ -651,9 +709,12 @@ namespace rn {
         renderPassBeginInfo.framebuffer = mFrameBuffers[currentImageIndex];
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = mWindowExtent;
-        renderPassBeginInfo.clearValueCount = 1;
-        VkClearValue clearValue = {{{.2f, .2f, .2f}}};
-        renderPassBeginInfo.pClearValues = &clearValue;
+
+        std::array<VkClearValue, 2> clearValues{};
+        clearValues[0].color = {{.2f, .2f, .2f}};
+        clearValues[1].depthStencil.depth = 1;
+        renderPassBeginInfo.clearValueCount = clearValues.size();
+        renderPassBeginInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
@@ -684,9 +745,31 @@ namespace rn {
             VkDeviceSize offset = {0};
             vkCmdBindVertexBuffers(mCommandBuffer, 0, 1, &vertexBuffer, &offset);
             vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            // Binding the descriptor sets
+            UpdateViewProjectionBuffersUniformBuffers(mCurrentImageIndex);
+
+            VkDescriptorSet textureDescriptor{};
+            Map<std::string, Texture *, std::hash<std::string>>::iterator texIter = mTextureMap.find(
+                    (*iter).second->GetTextureId());
+            if (texIter == mTextureMap.end()) {
+                LOG_WARN("No Texture Found for the Item {}.. Falling to Default Texture",
+                         (*iter).second->GetTextureId().c_str());
+                textureDescriptor = mTextureMap.find(
+                        R"(D:\cProjects\SmallVkEngine\textures\brick.png)")->second->GetTextureDescriptorSet();
+            } else {
+                textureDescriptor = texIter->second->GetTextureDescriptorSet();
+            }
+
+            List<VkDescriptorSet> descriptorSets = {mViewProjectionDescriptorSets[mCurrentImageIndex],
+                                                    textureDescriptor};
+            vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
+                                    descriptorSets.size(),
+                                    descriptorSets.data(), 0,
+                                    nullptr);
             vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
             iter++;
         }
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), mCommandBuffer);
     }
 
     void Graphics::EndFrame() {
@@ -714,6 +797,269 @@ namespace rn {
         presentInfo.pImageIndices = &mCurrentImageIndex;
 
         vkQueuePresentKHR(mPresentationQueue, &presentInfo);
+    }
+
+    void Graphics::Imgui_vulkan_init() {
+        VkDescriptorPoolSize pool_size[] = {
+                {VK_DESCRIPTOR_TYPE_SAMPLER,                1000},
+                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          1000},
+                {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1000},
+                {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   1000},
+                {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   1000},
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1000},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         1000},
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       1000}
+        };
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000;
+        pool_info.poolSizeCount = std::size(pool_size);
+        pool_info.pPoolSizes = pool_size;
+
+        Utility::CheckVulkanError(
+                vkCreateDescriptorPool(mDevices.logicalDevice, &pool_info, nullptr, &mImguiDescriptorPool),
+                "Failed to create the descriptor pool for imgui");
+
+        ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForVulkan(mRenderWindow, true);
+
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = mInstance;
+        init_info.PhysicalDevice = mDevices.physicalDevice;
+        init_info.Device = mDevices.logicalDevice;
+        init_info.Queue = mGraphicsQueue;
+        init_info.DescriptorPool = mImguiDescriptorPool;
+        init_info.MinImageCount = mSwapChainImageViews.size();
+        init_info.ImageCount = mSwapChainImageViews.size();
+        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.RenderPass = mRenderPass;
+
+        ImGui_ImplVulkan_Init(&init_info);
+
+    }
+
+#pragma endregion
+#pragma region Descriptors
+
+    void Graphics::CreateDescriptorLayouts() {
+        VkDescriptorSetLayoutBinding viewProjectionBinding{};
+        viewProjectionBinding.binding = 0;
+        viewProjectionBinding.descriptorCount = 1;
+        viewProjectionBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        viewProjectionBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        viewProjectionBinding.pImmutableSamplers = nullptr;
+
+        List<VkDescriptorSetLayoutBinding> layoutBinding = {viewProjectionBinding};
+
+        VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
+        layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutCreateInfo.bindingCount = layoutBinding.size();
+        layoutCreateInfo.pBindings = layoutBinding.data();
+
+        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mDevices.logicalDevice, &layoutCreateInfo, nullptr,
+                                                              &mViewProjectionDescriptorSetLayout),
+                                  "Failed to create the descriptor Set layout");
+
+        VkDescriptorSetLayoutBinding samplerBinding{};
+        samplerBinding.binding = 0;
+        samplerBinding.descriptorCount = 1;
+        samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        samplerBinding.pImmutableSamplers = nullptr;
+
+        List<VkDescriptorSetLayoutBinding> samplerLayoutBindings = {samplerBinding};
+        VkDescriptorSetLayoutCreateInfo samplerLayoutCreateInfo{};
+        samplerLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        samplerLayoutCreateInfo.bindingCount = samplerLayoutBindings.size();
+        samplerLayoutCreateInfo.pBindings = samplerLayoutBindings.data();
+        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(
+                mDevices.logicalDevice, &samplerLayoutCreateInfo, nullptr, &mSamplerDescriptorLayout
+        ), "Failed to create the sampler descriptor set layout");
+        mRendererContext.samplerDescriptorSetLayout = mSamplerDescriptorLayout;
+    }
+
+    void Graphics::CreateDescriptorPool() {
+        VkDescriptorPoolSize viewProjectionPoolSize{};
+        viewProjectionPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        viewProjectionPoolSize.descriptorCount = static_cast<std::uint32_t>(mViewProjectionBuffers.size());
+
+        List<VkDescriptorPoolSize> poolSize{viewProjectionPoolSize};
+        VkDescriptorPoolCreateInfo viewProjectionDescriptorCreateInfo{};
+        viewProjectionDescriptorCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        viewProjectionDescriptorCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        viewProjectionDescriptorCreateInfo.poolSizeCount = poolSize.size();
+        viewProjectionDescriptorCreateInfo.pPoolSizes = poolSize.data();
+
+        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &viewProjectionDescriptorCreateInfo,
+                                                         nullptr, &mViewProjectionDescriptorPool),
+                                  "Failed to create the Descriptor Pool For view and projection");
+
+        // Create The Sampler Descriptor Set Pool;
+        VkDescriptorPoolSize samplerPoolSize{};
+        samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerPoolSize.descriptorCount = Utility::MAX_OBJECTS;
+
+        List<VkDescriptorPoolSize> samplerPools{samplerPoolSize};
+        VkDescriptorPoolCreateInfo samplerPoolCreateInfo{};
+        samplerPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        samplerPoolCreateInfo.poolSizeCount = samplerPools.size();
+        samplerPoolCreateInfo.pPoolSizes = samplerPools.data();
+        samplerPoolCreateInfo.maxSets = Utility::MAX_OBJECTS;
+
+        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &samplerPoolCreateInfo, nullptr,
+                                                         &mSamplerDescriptorPool),
+                                  "Failed to create the descriptor pool for the sampler");
+        mRendererContext.samplerDescriptorPool = mSamplerDescriptorPool;
+    }
+
+    void Graphics::AllocateDescriptorSets() {
+        mViewProjectionDescriptorSets.resize(mSwapChainImageViews.size());
+        List<VkDescriptorSetLayout> viewProjectionDescriptorLayouts(mSwapChainImageViews.size(),
+                                                                    mViewProjectionDescriptorSetLayout);
+
+        VkDescriptorSetAllocateInfo projectionViewAllocateInfo{};
+        projectionViewAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        projectionViewAllocateInfo.descriptorSetCount = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        projectionViewAllocateInfo.pSetLayouts = viewProjectionDescriptorLayouts.data();
+        projectionViewAllocateInfo.descriptorPool = mViewProjectionDescriptorPool;
+
+        Utility::CheckVulkanError(vkAllocateDescriptorSets(mDevices.logicalDevice, &projectionViewAllocateInfo,
+                                                           mViewProjectionDescriptorSets.data()),
+                                  "Failed to allocate the descriptor set for the view and projection matrix");
+        for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+            VkDescriptorBufferInfo viewProjectionBufferInfo{};
+            viewProjectionBufferInfo.buffer = mViewProjectionBuffers[i];
+            viewProjectionBufferInfo.offset = 0;
+            viewProjectionBufferInfo.range = sizeof(ViewProjection);
+
+            VkWriteDescriptorSet viewProjectionWriteInfo{};
+            viewProjectionWriteInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            viewProjectionWriteInfo.descriptorCount = 1;
+            viewProjectionWriteInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            viewProjectionWriteInfo.dstBinding = 0;
+            viewProjectionWriteInfo.dstArrayElement = 0;
+            viewProjectionWriteInfo.pBufferInfo = &viewProjectionBufferInfo;
+            viewProjectionWriteInfo.dstSet = mViewProjectionDescriptorSets[i];
+
+            List<VkWriteDescriptorSet> writeInfo{viewProjectionWriteInfo};
+            vkUpdateDescriptorSets(mDevices.logicalDevice, writeInfo.size(), writeInfo.data(),
+                                   0, nullptr);
+        }
+
+    }
+
+    void Graphics::CreateViewProjectionUniformBuffers() {
+        mViewProjectionBuffers.resize(mSwapChainImageViews.size());
+        mViewProjectionMemory.resize(mSwapChainImageViews.size());
+        VkDeviceSize viewProjectionSize = sizeof(ViewProjection);
+
+        for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+            std::string viewProjectionBufferName = "View Projection Buffer";
+            Utility::CreateBuffer(mRendererContext, mViewProjectionBuffers[i], VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                  mViewProjectionMemory[i],
+                                  (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+                                  viewProjectionSize, viewProjectionBufferName);
+        }
+    }
+
+    void Graphics::UpdateViewProjectionBuffersUniformBuffers(size_t currentImageIndex) {
+        void *data;
+        // Updating the view and model matrix;
+        vkMapMemory(mDevices.logicalDevice, mViewProjectionMemory[currentImageIndex], 0, sizeof(ViewProjection), 0,
+                    &data);
+        memcpy(data, &mViewProjection, sizeof(ViewProjection));
+        vkUnmapMemory(mDevices.logicalDevice, mViewProjectionMemory[currentImageIndex]);
+    }
+
+    ViewProjection Graphics::mViewProjection = {};
+
+    void Graphics::SetViewProjection(rn::ViewProjection &&viewProjection) {
+        mViewProjection = viewProjection;
+    }
+
+#pragma endregion
+#pragma region Depth_Buffer
+
+    void Graphics::CreateDepthBufferImages() {
+        mDepthBufferImages.resize(mSwapChainImageViews.size());
+        mDepthBufferImageViews.resize(mSwapChainImageViews.size());
+        mDepthBufferImageMemory.resize(mSwapChainImageViews.size());
+        for (int i = 0; i < mDepthBufferImages.size(); i++) {
+            List<VkFormat> requiredFormats = {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT,
+                                              VK_FORMAT_D24_UNORM_S8_UINT};
+            mDepthBufferFormat = ChooseSupportedFormats(requiredFormats, VK_IMAGE_TILING_OPTIMAL,
+                                                        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+            mDepthBufferImages[i] = Utility::CreateImage("Depth BufferImage", mDevices.physicalDevice,
+                                                         mDevices.logicalDevice, mWindowExtent.width,
+                                                         mWindowExtent.height, mDepthBufferFormat,
+                                                         VK_IMAGE_TILING_OPTIMAL,
+                                                         (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT),
+                                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                         mDepthBufferImageMemory[i]);
+            Utility::CreateImageView(mDevices.logicalDevice, mDepthBufferImages[i], mDepthBufferFormat,
+                                     mDepthBufferImageViews[i],
+                                     VK_IMAGE_ASPECT_DEPTH_BIT);
+        }
+    }
+
+
+    VkFormat Graphics::ChooseSupportedFormats(List<VkFormat> &formats, VkImageTiling tiling,
+                                              VkFormatFeatureFlags formatFeatureFlags) {
+        for (VkFormat format: formats) {
+            VkFormatProperties properties{};
+            vkGetPhysicalDeviceFormatProperties(mDevices.physicalDevice, format, &properties);
+            if ((tiling == VK_IMAGE_TILING_LINEAR &&
+                 (properties.linearTilingFeatures & formatFeatureFlags) == formatFeatureFlags) ||
+                tiling == VK_IMAGE_TILING_OPTIMAL &
+                (properties.optimalTilingFeatures & formatFeatureFlags) == formatFeatureFlags) {
+                return format;
+            }
+        }
+        LOG_ERROR("Failed to find any supported Format for Depth Buffer Images");
+        std::exit(EXIT_FAILURE);
+    }
+
+#pragma endregion
+#pragma region Texture
+
+    void Graphics::CreateTextureDefaultSampler() {
+        VkSamplerCreateInfo samplerCreateInfo{};
+        samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+        samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+        samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerCreateInfo.mipLodBias = 0.0f;
+        samplerCreateInfo.minLod = 0.0f;
+        samplerCreateInfo.maxLod = 0.0f;
+        samplerCreateInfo.anisotropyEnable = VK_TRUE;
+        samplerCreateInfo.maxAnisotropy = 16;
+
+        Utility::CheckVulkanError(
+                vkCreateSampler(mDevices.logicalDevice, &samplerCreateInfo, nullptr, &mTextureSampler),
+                "Failed to create the sampler for the textures");
+        mRendererContext.textureSampler = mTextureSampler;
+    }
+
+    void Graphics::RegisterTexture(std::string &textureId, Texture *texture) {
+        Map<std::string, Texture *, std::hash<std::string>>::iterator iter = mTextureMap.find(textureId);
+        if (iter == mTextureMap.end()) {
+            mTextureMap.insert({textureId, texture});
+            return;
+        }
+        LOG_WARN("Texture {} already Existing", textureId.c_str());
+    }
+
+    void Graphics::CreateDefaultTexture(const std::string &defaultTexturePath) {
+        Texture *defaultTexture = new Texture(defaultTexturePath.c_str(), &mRendererContext);
+        mTextureMap.insert({defaultTexturePath, defaultTexture});
     }
 
 #pragma endregion

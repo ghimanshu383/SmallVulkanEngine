@@ -19,8 +19,9 @@ namespace rn {
         VkDeviceMemory mVertexBufferMemory{};
         VkDeviceMemory mIndexBufferMemory{};
         RendererContext mRenderContext{};
+        std::string mTextureId;
     public:
-        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices);
+        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::string &textureId);
 
         ~StaticMesh();
 
@@ -58,6 +59,7 @@ namespace rn {
 
         std::uint32_t GetStaticMeshIndicesCount() const { return mIndicesCount; }
 
+        std::string GetTextureId() const { return mTextureId; }
     };
 }
 #endif //SMALLVKENGINE_STATICMESH_H

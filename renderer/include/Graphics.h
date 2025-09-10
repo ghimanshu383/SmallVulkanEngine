@@ -65,7 +65,29 @@ namespace rn {
         VkSemaphore mPresentImageSemaphore;
         VkFence mPresentFinishFence;
         static Map<std::string, class StaticMesh *, std::hash<std::string>> meshObjectList;
+        VkDescriptorPool mImguiDescriptorPool;
 #pragma endregion Draw
+#pragma region Descriptors
+        List<VkDescriptorSet> mViewProjectionDescriptorSets{};
+        VkDescriptorPool mViewProjectionDescriptorPool{};
+        VkDescriptorSetLayout mViewProjectionDescriptorSetLayout{};
+        List<VkBuffer> mViewProjectionBuffers{};
+        List<VkDeviceMemory> mViewProjectionMemory{};
+        // Sampler Descriptor sets;
+        VkDescriptorSetLayout mSamplerDescriptorLayout{};
+        VkDescriptorPool mSamplerDescriptorPool{};
+        List<VkDescriptorSet> mSamplerDescriptorSets{};
+#pragma endregion
+#pragma region Depth_Buffer
+        VkFormat mDepthBufferFormat{};
+        List<VkImage> mDepthBufferImages{};
+        List<VkImageView> mDepthBufferImageViews{};
+        List<VkDeviceMemory> mDepthBufferImageMemory{};
+#pragma endregion
+#pragma region Texture
+        VkSampler mTextureSampler{};
+        static Map<std::string, class Texture *, std::hash<std::string>> mTextureMap;
+#pragma endregion
     public:
         // Functions
 #pragma region Common
@@ -101,6 +123,8 @@ namespace rn {
             mRendererContext.graphicsQueue = mGraphicsQueue;
             mRendererContext.presentationQueue = mPresentationQueue;
             mRendererContext.RegisterMesh = &RegisterMeshObject;
+            mRendererContext.UpdateViewAndProjectionMatrix = &SetViewProjection;
+            mRendererContext.RegisterTexture = &RegisterTexture;
 
         }
 
@@ -170,8 +194,6 @@ namespace rn {
 
         void CreateSwapChain();
 
-        void CreateImageView(VkImage &image, VkImageView &imageView, VkImageAspectFlags imageAspect);
-
 #pragma endregion
 #pragma region Pipeline
 
@@ -183,7 +205,7 @@ namespace rn {
 
 #pragma endregion
 #pragma region Draw
-#pragma endregion Draw
+
 
         void CreateSemaphoresAndFences();
 
@@ -202,6 +224,44 @@ namespace rn {
         void Draw();
 
         void EndFrame();
+
+        void Imgui_vulkan_init();
+
+#pragma endregion Draw
+#pragma region Descriptors
+        static ViewProjection mViewProjection;
+
+        static void SetViewProjection(ViewProjection &&viewProjection);
+
+        void CreateDescriptorPool();
+
+        void CreateDescriptorLayouts();
+
+        void AllocateDescriptorSets();
+
+        void CreateViewProjectionUniformBuffers();
+
+        void UpdateViewProjectionBuffersUniformBuffers(size_t currentImageIndex);
+
+#pragma endregion
+#pragma region Depth_Buffer
+
+        void CreateDepthBufferImages();
+
+        VkFormat
+        ChooseSupportedFormats(List<VkFormat> &formats, VkImageTiling tiling, VkFormatFeatureFlags formatFeatureFlags);
+
+#pragma endregion
+#pragma region Texture
+
+        void CreateTextureDefaultSampler();
+
+        static void RegisterTexture(std::string &textureId, Texture *texture);
+
+        void CreateDefaultTexture(const std::string& defaultTexturePath);
+
+
+#pragma endregion
     };
 }
 #endif //SMALLVKENGINE_GRAPHICS_H

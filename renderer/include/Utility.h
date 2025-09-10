@@ -5,6 +5,9 @@
 #ifndef SMALLVKENGINE_UTILITY_H
 #define SMALLVKENGINE_UTILITY_H
 
+#define STBI_NO_SIMD
+
+#include "stb_image.h"
 #include "precomp.h"
 
 namespace rn {
@@ -15,6 +18,15 @@ namespace rn {
     using List = std::vector<T>;
     template<typename T, typename R, typename S>
     using Map = std::unordered_map<T, R, S>;
+    struct Vertex {
+        glm::vec3 pos;
+        glm::vec4 color;
+        glm::vec2 uv;
+    };
+    struct ViewProjection {
+        glm::mat4 projection;
+        glm::mat4 view;
+    };
 
     struct RendererContext {
         VkPhysicalDevice physicalDevice;
@@ -22,17 +34,22 @@ namespace rn {
         VkCommandPool commandPool;
         VkQueue graphicsQueue;
         VkQueue presentationQueue;
+        VkDescriptorPool samplerDescriptorPool;
+        VkDescriptorSetLayout samplerDescriptorSetLayout;
+        VkSampler textureSampler;
 
         void (*RegisterMesh)(std::string &id, class StaticMesh *);
+
+        void (*RegisterTexture)(std::string &texturePathId, class Texture *);
+
+        void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
     };
 
-    struct Vertex {
-        glm::vec3 pos;
-        glm::vec4 color;
-    };
 
     class Utility {
     public:
+        static uint32_t MAX_OBJECTS;
+
         static void ReadFileBinary(const char *fileName, List<std::uint8_t> &buffer) {
             std::ifstream inputStream{fileName, std::ios::binary | std::ios::ate};
             if (!inputStream) {
@@ -65,6 +82,27 @@ namespace rn {
         static void SubmitCommandBuffer(RendererContext &ctx, VkCommandBuffer &commandBuffer);
 
         static void CopyBuffers(RendererContext &ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
+
+        static std::uint8_t *LoadTextureImage(const char *fileName, int &width, int &height, VkDeviceSize &imageSize);
+
+        static void
+        CopyBufferToImage(RendererContext &ctx, VkBuffer srcBuffer, VkImage dstImage, uint32_t width, uint32_t height,
+                          VkImageAspectFlags aspectFlags);
+
+        static void
+        TransitionImageLayout(RendererContext ctx, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+                              VkImageAspectFlags aspectFlags);
+
+        static VkImage
+        CreateImage(std::string &&imageName, VkPhysicalDevice physicalDevice, VkDevice logicalDevice,
+                    unsigned int width, unsigned int height,
+                    VkFormat format,
+                    VkImageTiling imageTiling,
+                    unsigned int imageUsageFlags, unsigned int memoryPropertyFlags,
+                    VkDeviceMemory &memory);
+
+        static void CreateImageView(VkDevice logicalDevice, VkImage &image, VkFormat format, VkImageView &imageView,
+                                    unsigned int imageAspect);
     };
 }
 #endif //SMALLVKENGINE_UTILITY_H

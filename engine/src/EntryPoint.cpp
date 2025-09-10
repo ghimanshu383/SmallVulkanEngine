@@ -3,8 +3,8 @@
 //
 #include <memory>
 
-#include "MainWindow.h"
-#include "Constants.h"
+#include "Core/MainWindow.h"
+#include "Core/Constants.h"
 
 int main() {
     std::shared_ptr<vk::MainWindow> mainWindow = std::make_shared<vk::MainWindow>(vk::Constants::WINDOW_WIDTH,

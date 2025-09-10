@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <functional>
 #include <string_view>
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_projection.hpp>

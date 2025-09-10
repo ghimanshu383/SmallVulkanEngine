@@ -5,7 +5,7 @@
 #ifndef SMALLVKENGINE_SCENE_H
 #define SMALLVKENGINE_SCENE_H
 
-#include "Constants.h"
+#include "Core/Constants.h"
 #include "Utility.h"
 #include "GameObject.h"
 

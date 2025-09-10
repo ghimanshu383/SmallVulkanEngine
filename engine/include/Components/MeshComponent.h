@@ -6,7 +6,7 @@
 #define SMALLVKENGINE_MESHCOMPONENT_H
 
 #include "Component.h"
-#include "Constants.h"
+#include "Core/Constants.h"
 #include "Utility.h"
 #include "StaticMesh.h"
 
@@ -18,9 +18,10 @@ namespace vk {
         List<rn::Vertex> mVertexList;
         List<std::uint32_t> mIndexList;
         rn::StaticMesh *mStaticMesh;
+        std::string mTextureId;
     public:
-        MeshComponent(GameObject *gameObject, std::string &id,  List<rn::Vertex> &vertices,
-                      List<std::uint32_t> &indices);
+        MeshComponent(GameObject *gameObject, std::string &id, List<rn::Vertex> &vertices,
+                      List<std::uint32_t> &indices, std::string textureId = "default");
 
         ~MeshComponent();
 

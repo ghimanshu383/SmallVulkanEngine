@@ -1,9 +1,9 @@
 add_executable(${ENGINE}
-        include/MainWindow.h
-        src/MainWindow.cpp
+        include/Core/MainWindow.h
+        src/Core/MainWindow.cpp
         src/EntryPoint.cpp
-        include/Constants.h
-        src/Constants.cpp
+        include/Core/Constants.h
+        src/Core/Constants.cpp
         include/Components/Component.h
         src/Components/Component.cpp
         include/Entity/GameObject.h
@@ -12,6 +12,13 @@ add_executable(${ENGINE}
         include/Entity/Scene.h
         src/Entity/Scene.cpp
         src/Components/MeshComponent.cpp
+        include/Core/InputSystem.h
+        src/Core/InputSystem.cpp
+        include/Core/Camera.h
+        src/Core/Camera.cpp
+        include/Core/Delegate.h
+        include/Components/TextureComponent.h
+        src/Components/TextureComponent.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC

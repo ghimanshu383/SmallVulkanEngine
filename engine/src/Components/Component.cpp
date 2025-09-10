@@ -6,7 +6,7 @@
 #include "Entity/Scene.h"
 
 namespace vk {
-    Component::Component(vk::GameObject *gameObject, std::string &id) : mOwningGameObject{gameObject}, id {id} {
+    Component::Component(vk::GameObject *gameObject, const std::string &id) : mOwningGameObject{gameObject}, id{id} {
         ctx = mOwningGameObject->GetScene()->GetRendererContext();
     }
 

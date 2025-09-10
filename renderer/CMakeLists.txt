@@ -6,6 +6,24 @@ add_library(${RENDERER} STATIC
         include/StaticMesh.h
         src/StaticMesh.cpp
         src/Utility.cpp
+        include/imgui/imconfig.h
+        include/imgui/imgui.h
+        include/imgui/imgui_impl_glfw.h
+        include/imgui/imstb_rectpack.h
+        include/imgui/imstb_textedit.h
+        include/imgui/imstb_truetype.h
+        include/imgui/imgui_impl_vulkan.h
+        src/imgui/imgui.cpp
+        src/imgui/imgui_demo.cpp
+        src/imgui/imgui_impl_glfw.cpp
+        src/imgui/imgui_impl_vulkan.cpp
+        src/imgui/imgui_widgets.cpp
+        include/imgui/imgui_internal.h
+        src/imgui/imgui_draw.cpp
+        src/imgui/imgui_tables.cpp
+        include/Texture.h
+        src/Texture.cpp
+        include/stb_image.h
 )
 
 target_include_directories(${RENDERER} PUBLIC

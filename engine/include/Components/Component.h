@@ -17,7 +17,7 @@ namespace vk {
         rn::RendererContext *ctx;
         std::string id;
     public:
-        explicit Component(GameObject *gameObject, std::string &id);
+        explicit Component(GameObject *gameObject, const std::string &id);
 
         virtual void Tick(float deltaTime);
 

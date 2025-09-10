@@ -2,10 +2,12 @@
 // Created by ghima on 30-08-2025.
 //
 #include "StaticMesh.h"
+#include "Texture.h"
 
 namespace rn {
-    StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices)
-            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices} {
+    StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices,
+                           std::string &textureId)
+            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mTextureId{textureId} {
         mIndicesCount = indices.size();
         Init();
     }

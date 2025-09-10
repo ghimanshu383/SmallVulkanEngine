@@ -6,7 +6,7 @@
 #define SMALLVKENGINE_GAMEOBJECT_H
 
 #include "Components/Component.h"
-#include "Constants.h"
+#include "Core/Constants.h"
 #include "Utility.h"
 
 namespace vk {
