@@ -7,11 +7,13 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
+#include "lights/OmniDirectionalLight.h"
 
 namespace rn {
 #pragma region Common
     Map<std::string, StaticMesh *, std::hash<std::string>> Graphics::meshObjectList = {};
     Map<std::string, Texture *, std::hash<std::string>> Graphics::mTextureMap = {};
+    RendererContext Graphics::mRendererContext = {};
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -54,10 +56,15 @@ namespace rn {
             delete texture;
             textureIter++;
         }
+        // Just for testing the light make the light in the engine as a game object;
+        delete light;
         vkDestroyDescriptorPool(mDevices.logicalDevice, mViewProjectionDescriptorPool, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mSamplerDescriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mViewProjectionDescriptorSetLayout, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mSamplerDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mLightsDescriptorSetLayout, nullptr);
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mLightDescriptorPool, nullptr);
+
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -356,7 +363,6 @@ namespace rn {
         return actualExtent;
     }
 
-
     void Graphics::CreateSwapChain() {
         GetSurfaceCapabilities();
         mSurfaceFormat = ChooseSurfaceFormat();
@@ -543,8 +549,14 @@ namespace rn {
         textureCoordsInputAttribute.format = VK_FORMAT_R32G32_SFLOAT;
         textureCoordsInputAttribute.offset = offsetof(Vertex, uv);
 
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{
-                positionAttribute, colorAttribute, textureCoordsInputAttribute
+        VkVertexInputAttributeDescription normalInputAttribute{};
+        normalInputAttribute.binding = 0;
+        normalInputAttribute.location = 3;
+        normalInputAttribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        normalInputAttribute.offset = offsetof(Vertex, normals);
+
+        std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{
+                positionAttribute, colorAttribute, textureCoordsInputAttribute, normalInputAttribute
         };
         VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{};
         vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -597,7 +609,8 @@ namespace rn {
         CreateDescriptorLayouts();
         CreateTextureDefaultSampler();
 
-        List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout};
+        List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout,
+                                               mLightsDescriptorSetLayout};
         VkPipelineLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutCreateInfo.setLayoutCount = setLayouts.size();
@@ -737,6 +750,7 @@ namespace rn {
 
     void Graphics::Draw() {
         //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
+        List<VkDescriptorSet> descriptorSets{};
         auto iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
             VkBuffer vertexBuffer = iter->second->GetVertexBuffer();
@@ -747,6 +761,7 @@ namespace rn {
             vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
             // Binding the descriptor sets
             UpdateViewProjectionBuffersUniformBuffers(mCurrentImageIndex);
+            light->UpdateLightDescriptorSet(mCurrentImageIndex);
 
             VkDescriptorSet textureDescriptor{};
             Map<std::string, Texture *, std::hash<std::string>>::iterator texIter = mTextureMap.find(
@@ -760,8 +775,9 @@ namespace rn {
                 textureDescriptor = texIter->second->GetTextureDescriptorSet();
             }
 
-            List<VkDescriptorSet> descriptorSets = {mViewProjectionDescriptorSets[mCurrentImageIndex],
-                                                    textureDescriptor};
+            descriptorSets.push_back(mViewProjectionDescriptorSets[mCurrentImageIndex]);
+            descriptorSets.push_back(textureDescriptor);
+            descriptorSets.push_back(light->GetLightDescriptorSets(mCurrentImageIndex));
             vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
                                     descriptorSets.size(),
                                     descriptorSets.data(), 0,
@@ -880,6 +896,24 @@ namespace rn {
                 mDevices.logicalDevice, &samplerLayoutCreateInfo, nullptr, &mSamplerDescriptorLayout
         ), "Failed to create the sampler descriptor set layout");
         mRendererContext.samplerDescriptorSetLayout = mSamplerDescriptorLayout;
+
+        VkDescriptorSetLayoutBinding lightsLayoutBinding{};
+        lightsLayoutBinding.binding = 0;
+        lightsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        lightsLayoutBinding.descriptorCount = 1;
+        lightsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        lightsLayoutBinding.pImmutableSamplers = nullptr;
+
+        List<VkDescriptorSetLayoutBinding> lightsLayoutBindings{lightsLayoutBinding};
+        VkDescriptorSetLayoutCreateInfo lightsLayoutCreateInfo{};
+        lightsLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        lightsLayoutCreateInfo.bindingCount = lightsLayoutBindings.size();
+        lightsLayoutCreateInfo.pBindings = lightsLayoutBindings.data();
+
+        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mDevices.logicalDevice, &lightsLayoutCreateInfo, nullptr,
+                                                              &mLightsDescriptorSetLayout),
+                                  "Failed to create the descriptor set layouts for lights");
+        mRendererContext.lightsLayout = mLightsDescriptorSetLayout;
     }
 
     void Graphics::CreateDescriptorPool() {
@@ -914,6 +948,23 @@ namespace rn {
                                                          &mSamplerDescriptorPool),
                                   "Failed to create the descriptor pool for the sampler");
         mRendererContext.samplerDescriptorPool = mSamplerDescriptorPool;
+        // Creating the descriptor pool for the lights;
+        VkDescriptorPoolSize lightsPoolSize{};
+        lightsPoolSize.descriptorCount = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        lightsPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+        List<VkDescriptorPoolSize> lightsDescriptorPoolSizes{lightsPoolSize};
+        VkDescriptorPoolCreateInfo lightsPoolCreateInfo{};
+        lightsPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        lightsPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        lightsPoolCreateInfo.poolSizeCount = lightsDescriptorPoolSizes.size();
+        lightsPoolCreateInfo.pPoolSizes = lightsDescriptorPoolSizes.data();
+
+        Utility::CheckVulkanError(
+                vkCreateDescriptorPool(mDevices.logicalDevice, &lightsPoolCreateInfo, nullptr, &mLightDescriptorPool),
+                "Failed to create the descriptor pool for lights");
+
+        mRendererContext.lightsDescriptorPool = mLightDescriptorPool;
     }
 
     void Graphics::AllocateDescriptorSets() {
@@ -1048,18 +1099,27 @@ namespace rn {
         mRendererContext.textureSampler = mTextureSampler;
     }
 
-    void Graphics::RegisterTexture(std::string &textureId, Texture *texture) {
+    Texture *Graphics::RegisterTexture(std::string &textureId) {
         Map<std::string, Texture *, std::hash<std::string>>::iterator iter = mTextureMap.find(textureId);
+        Texture *texture = nullptr;
         if (iter == mTextureMap.end()) {
+            texture = new Texture(textureId.c_str(), &mRendererContext);
             mTextureMap.insert({textureId, texture});
-            return;
+
+        } else {
+            LOG_WARN("Texture {} already Existing", textureId.c_str());
+            texture = iter->second;
         }
-        LOG_WARN("Texture {} already Existing", textureId.c_str());
+        return texture;
     }
 
     void Graphics::CreateDefaultTexture(const std::string &defaultTexturePath) {
         Texture *defaultTexture = new Texture(defaultTexturePath.c_str(), &mRendererContext);
         mTextureMap.insert({defaultTexturePath, defaultTexture});
+
+        // Testing the default lights;
+        OmniDirectionalInfo testInfo = {{0, -0.5, -1}, {1, 1, 1, 0}, .5f, .5};
+        light = new OmniDirectionalLight{"test", &mRendererContext, testInfo};
     }
 
 #pragma endregion

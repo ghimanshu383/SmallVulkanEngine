@@ -82,15 +82,17 @@ namespace vk {
         mDefaultCamera = new Camera{this, glm::vec3{0, 0, -3}, .005f, .1f, 90.f, 0.f};
         mDefaultCamera->Init();
 
-        List<rn::Vertex> vertOne = {{glm::vec3{0, -1, 0},   {1, 0, 0, 1}, {.5, .5}},
-                                    {glm::vec3{-0.5, 0, 0}, {0, 1, 0, 1}, {0,  0}},
-                                    {glm::vec3{0.5, 0, 0},  {0, 0, 1, 1}, {1,  0}}};
-        List<std::uint32_t> indices = {0, 1, 2};
+        List<rn::Vertex> vertOne = {{glm::vec3{-0.5, -1, 0}, {1, 0, 0, 1}, {0, 1}},
+                                    {glm::vec3{-0.5, 0, 0},  {0, 1, 0, 1}, {0, 0}},
+                                    {glm::vec3{0.5, 0, 0},   {0, 0, 1, 1}, {1, 0}},
+                                    {glm::vec3{0.5, -1, 0},  {1, 0, 0, 1}, {1, 1}}};
+        List<std::uint32_t> indices = {0, 1, 2,
+                                       0, 2, 3};
         std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>();
 
         std::string meshName = "Triangle Mesh";
 
-        testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\Textile.jpg)", &mCtx);
+        testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\brick.png)", &mCtx);
         testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices);
 
         mDefaultScene->BeginPlay();

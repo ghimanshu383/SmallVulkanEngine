@@ -12,7 +12,25 @@ namespace rn {
         Init();
     }
 
+    void StaticMesh::CalculateAverageNormals() {
+        for (size_t i = 0; i < mIndicesList.size(); i += 3) {
+            Vertex &verOne = mVertList[mIndicesList[i]];
+            Vertex &vertTwo = mVertList[mIndicesList[i + 1]];
+            Vertex &vertThree = mVertList[mIndicesList[i + 2]];
+
+            glm::vec3 normalVecOne = {verOne.pos - vertTwo.pos};
+            glm::vec3 normalVecTwo = {verOne.pos - vertThree.pos};
+            glm::vec3 normal = glm::normalize(glm::cross(normalVecOne, normalVecTwo));
+
+            verOne.normals = normal;
+            vertTwo.normals = normal;
+            vertThree.normals = normal;
+        }
+    }
+
     void StaticMesh::Init() {
+
+        CalculateAverageNormals();
         // Creating the vertex buffers;
         CreateMeshBuffer<Vertex>(mVertList, (VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
                                  mVertexBuffer, mVertexBufferMemory, "VertexBuffer");

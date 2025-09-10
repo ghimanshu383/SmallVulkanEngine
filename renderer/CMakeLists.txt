@@ -24,6 +24,8 @@ add_library(${RENDERER} STATIC
         include/Texture.h
         src/Texture.cpp
         include/stb_image.h
+        include/lights/OmniDirectionalLight.h
+        src/lights/OmniDirectionalLight.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

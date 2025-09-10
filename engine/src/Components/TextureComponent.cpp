@@ -13,8 +13,7 @@ namespace vk {
 
     void TextureComponent::BeginPlay() {
         Component::BeginPlay();
-        mTexture = new rn::Texture(textureId.c_str(), ctx);
-        mCtx->RegisterTexture(textureId, mTexture);
+        mTexture = mCtx->RegisterTexture(textureId);
     }
 
     void TextureComponent::Tick(float deltaTime) {

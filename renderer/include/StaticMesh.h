@@ -20,6 +20,9 @@ namespace rn {
         VkDeviceMemory mIndexBufferMemory{};
         RendererContext mRenderContext{};
         std::string mTextureId;
+
+        void CalculateAverageNormals();
+
     public:
         StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::string &textureId);
 

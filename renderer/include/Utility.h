@@ -22,13 +22,24 @@ namespace rn {
         glm::vec3 pos;
         glm::vec4 color;
         glm::vec2 uv;
+        glm::vec3 normals;
     };
     struct ViewProjection {
         glm::mat4 projection;
         glm::mat4 view;
     };
 
+    struct OmniDirectionalInfo {
+        alignas(16) glm::vec3 position;
+        alignas(16) glm::vec4 color;
+        alignas(16) float ambientIntensity;
+        float paddingAmb[3];
+        alignas(16) float diffuseIntensity;
+        float padding[3];
+    };
+
     struct RendererContext {
+        size_t swapChainImageCount;
         VkPhysicalDevice physicalDevice;
         VkDevice logicalDevice;
         VkCommandPool commandPool;
@@ -37,10 +48,12 @@ namespace rn {
         VkDescriptorPool samplerDescriptorPool;
         VkDescriptorSetLayout samplerDescriptorSetLayout;
         VkSampler textureSampler;
+        VkDescriptorSetLayout lightsLayout;
+        VkDescriptorPool lightsDescriptorPool;
 
         void (*RegisterMesh)(std::string &id, class StaticMesh *);
 
-        void (*RegisterTexture)(std::string &texturePathId, class Texture *);
+        class Texture *(*RegisterTexture)(std::string &texturePathId);
 
         void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
     };

@@ -12,7 +12,7 @@ namespace rn {
         // Instances
 #pragma region Common
         GLFWwindow *mRenderWindow;
-        RendererContext mRendererContext;
+        static RendererContext mRendererContext;
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -77,6 +77,9 @@ namespace rn {
         VkDescriptorSetLayout mSamplerDescriptorLayout{};
         VkDescriptorPool mSamplerDescriptorPool{};
         List<VkDescriptorSet> mSamplerDescriptorSets{};
+        // Lights Descriptor sets;
+        VkDescriptorSetLayout mLightsDescriptorSetLayout;
+        VkDescriptorPool mLightDescriptorPool;
 #pragma endregion
 #pragma region Depth_Buffer
         VkFormat mDepthBufferFormat{};
@@ -87,6 +90,9 @@ namespace rn {
 #pragma region Texture
         VkSampler mTextureSampler{};
         static Map<std::string, class Texture *, std::hash<std::string>> mTextureMap;
+
+        class OmniDirectionalLight *light;
+
 #pragma endregion
     public:
         // Functions
@@ -117,6 +123,7 @@ namespace rn {
         }
 
         void SetRendererContext() {
+            mRendererContext.swapChainImageCount = mSwapChainImageViews.size();
             mRendererContext.physicalDevice = mDevices.physicalDevice;
             mRendererContext.logicalDevice = mDevices.logicalDevice;
             mRendererContext.commandPool = mCommandPool;
@@ -256,9 +263,9 @@ namespace rn {
 
         void CreateTextureDefaultSampler();
 
-        static void RegisterTexture(std::string &textureId, Texture *texture);
+        static Texture *RegisterTexture(std::string &textureId);
 
-        void CreateDefaultTexture(const std::string& defaultTexturePath);
+        void CreateDefaultTexture(const std::string &defaultTexturePath);
 
 
 #pragma endregion
