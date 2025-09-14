@@ -25,6 +25,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
+#set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+#set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+#
+#FetchContent_Declare(
+#        assimp
+#        GIT_REPOSITORY https://github.com/assimp/assimp.git
+#        GIT_TAG v5.3.1
+#        GIT_SHALLOW FALSE
+#)
+#FetchContent_MakeAvailable(assimp)
+
 add_subdirectory(${RENDERER})
 add_subdirectory(${ENGINE})
 

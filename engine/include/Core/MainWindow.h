@@ -23,6 +23,7 @@ namespace vk {
         Scene *mDefaultScene;
         Camera *mDefaultCamera;
         std::shared_ptr<Delegate<>> mRenderLoopDelegate = std::make_shared<Delegate<>>();
+        std::shared_ptr<Delegate<float>> mRenderLoopTickDelegate = std::make_shared<Delegate<float>>();
 
         void Init(int width, int height, const char *title);
 
@@ -41,6 +42,8 @@ namespace vk {
 
         // Getters;
         std::shared_ptr<Delegate<>> GetRenderLoopDelegate() const { return mRenderLoopDelegate; }
+
+        const std::shared_ptr<Delegate<float>> GetRenderLoopTickDelegate() const { return mRenderLoopTickDelegate; };
 
         const rn::RendererContext &GetRendererContext() const { return mCtx; }
 

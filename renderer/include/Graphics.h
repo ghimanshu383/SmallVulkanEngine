@@ -73,6 +73,12 @@ namespace rn {
         VkDescriptorSetLayout mViewProjectionDescriptorSetLayout{};
         List<VkBuffer> mViewProjectionBuffers{};
         List<VkDeviceMemory> mViewProjectionMemory{};
+        // Dynamic Uniform Buffers;
+        List<VkBuffer> mDynamicBuffers{};
+        List<VkDeviceMemory> mDynamicBufferMemory{};
+        size_t mModelMinAlignment{};
+        VkDeviceSize mBufferMinAlignment{};
+        ModelUBO *mModelTransferSpace = nullptr;
         // Sampler Descriptor sets;
         VkDescriptorSetLayout mSamplerDescriptorLayout{};
         VkDescriptorPool mSamplerDescriptorPool{};
@@ -91,7 +97,7 @@ namespace rn {
         VkSampler mTextureSampler{};
         static Map<std::string, class Texture *, std::hash<std::string>> mTextureMap;
 
-        class OmniDirectionalLight *light;
+        static class OmniDirectionalLight *mDirectionalLight;
 
 #pragma endregion
     public:
@@ -132,6 +138,7 @@ namespace rn {
             mRendererContext.RegisterMesh = &RegisterMeshObject;
             mRendererContext.UpdateViewAndProjectionMatrix = &SetViewProjection;
             mRendererContext.RegisterTexture = &RegisterTexture;
+            mRendererContext.SetUpAsDirectionalLight = &SetUpDirectionalLight;
 
         }
 
@@ -246,9 +253,11 @@ namespace rn {
 
         void AllocateDescriptorSets();
 
-        void CreateViewProjectionUniformBuffers();
+        void CreateUniformBuffers();
 
-        void UpdateViewProjectionBuffersUniformBuffers(size_t currentImageIndex);
+        void UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model);
+
+        void AllocateDynamicBufferTransferSpace();
 
 #pragma endregion
 #pragma region Depth_Buffer
@@ -266,6 +275,8 @@ namespace rn {
         static Texture *RegisterTexture(std::string &textureId);
 
         void CreateDefaultTexture(const std::string &defaultTexturePath);
+
+        static void SetUpDirectionalLight(class OmniDirectionalLight *directionalLight);
 
 
 #pragma endregion

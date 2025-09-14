@@ -29,6 +29,8 @@ namespace vk {
 
         const std::string &GetId() const { return id; }
 
+        // Getter
+        const GameObject *GetOwningGameObject() const { return mOwningGameObject; }
 
     };
 }

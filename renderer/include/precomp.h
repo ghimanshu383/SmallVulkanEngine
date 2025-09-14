@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.h>
 #include "GLFW/glfw3.h"
 #include <iostream>
+#include <array>
 #include <fstream>
 #include <algorithm>
 #include <cstring>

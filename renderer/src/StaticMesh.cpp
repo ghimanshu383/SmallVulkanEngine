@@ -6,8 +6,9 @@
 
 namespace rn {
     StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices,
-                           std::string &textureId)
-            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mTextureId{textureId} {
+                           std::string &textureId, bool calculateNormals)
+            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mTextureId{textureId},
+              mCalculateNormals{calculateNormals} {
         mIndicesCount = indices.size();
         Init();
     }
@@ -30,7 +31,10 @@ namespace rn {
 
     void StaticMesh::Init() {
 
-        CalculateAverageNormals();
+
+        if (mCalculateNormals) {
+            CalculateAverageNormals();
+        }
         // Creating the vertex buffers;
         CreateMeshBuffer<Vertex>(mVertList, (VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
                                  mVertexBuffer, mVertexBufferMemory, "VertexBuffer");

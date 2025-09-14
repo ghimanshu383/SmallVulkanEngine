@@ -12,6 +12,8 @@
 #include "Core/InputSystem.h"
 #include "Core/Camera.h"
 #include "Components/TextureComponent.h"
+#include "Entity/SkyLight.h"
+#include "Components/TransformComponent.h"
 
 namespace vk {
     MainWindow::MainWindow(int width, int height, const char *title) {
@@ -50,6 +52,8 @@ namespace vk {
         while (!glfwWindowShouldClose(mWindow)) {
             glfwPollEvents();
             mRenderLoopDelegate->Invoke();
+            // Implement the delta Time functionality later;
+            mDefaultScene->Tick(1.f);
 
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
@@ -93,7 +97,25 @@ namespace vk {
         std::string meshName = "Triangle Mesh";
 
         testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\brick.png)", &mCtx);
-        testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices);
+        testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices, "", true);
+        std::string tranName = meshName + " Transform";
+        std::shared_ptr tranComp = testObject->SpawnComponent<TransformComponent>(meshName);
+
+        // Setting up the default Directional Light;
+        rn::OmniDirectionalInfo skyLightInfo{};
+        skyLightInfo.position = {0, -.5, -2, 1};
+        skyLightInfo.color = {1, 1, 1, 1};
+        skyLightInfo.intensities = {1, 1, 0, 0};
+
+        std::shared_ptr<SkyLight> skyLight = mDefaultScene->SpawnGameObject<SkyLight>("Default Sky Light",
+                                                                                      skyLightInfo);
+
+        skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", &mCtx);
+        skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", vertOne, indices, "", true);
+        std::shared_ptr<TransformComponent> transformComponent = skyLight->SpawnComponent<TransformComponent>(
+                "Sky Light transform Component");
+        transformComponent->setTranslate(skyLight->GetLightInfo().position);
+        transformComponent->setScale({.3, .3, .3});
 
         mDefaultScene->BeginPlay();
     }

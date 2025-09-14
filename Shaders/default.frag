@@ -10,16 +10,15 @@ layout (set = 1, binding = 0) uniform sampler2D defaultSampler;
 
 
 layout (set = 2, binding = 0) uniform OmniDirectionalInfo {
-    vec3 position;
+    vec4 position;
     vec4 color;
-    float ambientIntensity;
-    float diffuseIntensity;
+    vec4 intensities;
 } lightInfo;
 
 vec4 CalculatePongLights() {
-    vec4 ambientLight = lightInfo.ambientIntensity * lightInfo.color;
-    float diffuseFactor = max(dot(normalize(vNormals), normalize(lightInfo.position)), 0.0);
-    vec4 diffuseLight = lightInfo.color * diffuseFactor * lightInfo.diffuseIntensity;
+    vec4 ambientLight = lightInfo.intensities.x * lightInfo.color;
+    float diffuseFactor = max(dot(normalize(vNormals), normalize(lightInfo.position.xyz)), 0.0);
+    vec4 diffuseLight = lightInfo.color * lightInfo.intensities.y * diffuseFactor;
 
     return (ambientLight + diffuseLight);
 }

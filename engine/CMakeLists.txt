@@ -19,12 +19,20 @@ add_executable(${ENGINE}
         include/Core/Delegate.h
         include/Components/TextureComponent.h
         src/Components/TextureComponent.cpp
+        include/Entity/SkyLight.h
+        src/Entity/SkyLight.cpp
+        include/Components/TransformComponent.h
+        src/Components/TransformComponent.cpp
+        include/Components/ModelComponent.h
+        src/Components/ModelComponent.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/ext/assimp/include
 )
 
 target_link_libraries(${ENGINE} PUBLIC
         ${RENDERER}
+        ${CMAKE_SOURCE_DIR}/ext/assimp/lib/Release/assimp-vc143-mt.lib
 )

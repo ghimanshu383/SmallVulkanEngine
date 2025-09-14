@@ -15,12 +15,15 @@ layout (set = 0, binding = 0) uniform ViewProjection {
     mat4 projection;
     mat4 view;
 } vp;
+layout (set = 0, binding = 1) uniform ModelUBO {
+    mat4 model;
+} model;
 
 layout (location = 0) out vec4 vColor;
 layout (location = 1) out vec2 textureCoords;
 layout (location = 2) out vec3 vNormals;
 void main() {
-    gl_Position = vp.projection * vp.view * mat4(1) * vec4(pos, 1.f);
+    gl_Position = vp.projection * vp.view * model.model * vec4(pos, 1.f);
     vColor = color;
     textureCoords = uv;
     vNormals = normals;

@@ -28,14 +28,14 @@ namespace rn {
         glm::mat4 projection;
         glm::mat4 view;
     };
+    struct ModelUBO {
+        glm::mat4 model;
+    };
 
     struct OmniDirectionalInfo {
-        alignas(16) glm::vec3 position;
+        alignas(16) glm::vec4 position;
         alignas(16) glm::vec4 color;
-        alignas(16) float ambientIntensity;
-        float paddingAmb[3];
-        alignas(16) float diffuseIntensity;
-        float padding[3];
+        alignas(16) glm::vec4 intensities;
     };
 
     struct RendererContext {
@@ -56,6 +56,8 @@ namespace rn {
         class Texture *(*RegisterTexture)(std::string &texturePathId);
 
         void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
+
+        void (*SetUpAsDirectionalLight)(class OmniDirectionalLight *directionalLight);
     };
 
 

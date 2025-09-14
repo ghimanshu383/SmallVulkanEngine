@@ -32,7 +32,6 @@ target_include_directories(${RENDERER} PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         D:\\VulkanSDK\\1.3.283.0\\Include
         ${CMAKE_SOURCE_DIR}/ext/glm
-
 )
 
 target_link_libraries(${RENDERER} PUBLIC

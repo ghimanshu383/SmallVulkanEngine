@@ -19,9 +19,10 @@ namespace vk {
         List<std::uint32_t> mIndexList;
         rn::StaticMesh *mStaticMesh;
         std::string mTextureId;
+        bool mCalculateNormals;
     public:
-        MeshComponent(GameObject *gameObject, std::string &id, List<rn::Vertex> &vertices,
-                      List<std::uint32_t> &indices, std::string textureId = "default");
+        MeshComponent(GameObject *gameObject, const std::string &id, List<rn::Vertex> &vertices,
+                      List<std::uint32_t> &indices, std::string textureId = "", bool calculateNormals = false);
 
         ~MeshComponent();
 

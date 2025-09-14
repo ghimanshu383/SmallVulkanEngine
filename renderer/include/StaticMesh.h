@@ -20,11 +20,14 @@ namespace rn {
         VkDeviceMemory mIndexBufferMemory{};
         RendererContext mRenderContext{};
         std::string mTextureId;
+        glm::mat4 mModelMatrix{1};
+        bool mCalculateNormals;
 
         void CalculateAverageNormals();
 
     public:
-        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::string &textureId);
+        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::string &textureId,
+                   bool calculateNormals);
 
         ~StaticMesh();
 
@@ -63,6 +66,13 @@ namespace rn {
         std::uint32_t GetStaticMeshIndicesCount() const { return mIndicesCount; }
 
         std::string GetTextureId() const { return mTextureId; }
+
+        // Getters and Setters;
+        void SetModelMatrix(const glm::mat4 &modelMatrix) {
+            mModelMatrix = modelMatrix;
+        }
+
+        const glm::mat4 &GetModelMatrix() const { return mModelMatrix; }
     };
 }
 #endif //SMALLVKENGINE_STATICMESH_H

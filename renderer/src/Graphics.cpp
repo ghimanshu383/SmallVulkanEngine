@@ -9,11 +9,13 @@
 #include "imgui/imgui_impl_vulkan.h"
 #include "lights/OmniDirectionalLight.h"
 
+
 namespace rn {
 #pragma region Common
     Map<std::string, StaticMesh *, std::hash<std::string>> Graphics::meshObjectList = {};
     Map<std::string, Texture *, std::hash<std::string>> Graphics::mTextureMap = {};
     RendererContext Graphics::mRendererContext = {};
+    OmniDirectionalLight *Graphics::mDirectionalLight = nullptr;
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -35,7 +37,8 @@ namespace rn {
         Imgui_vulkan_init();
 
         // Setting up the view and projection matrix descriptor sets
-        CreateViewProjectionUniformBuffers();
+        AllocateDynamicBufferTransferSpace();
+        CreateUniformBuffers();
 
         CreateDescriptorPool();
         AllocateDescriptorSets();
@@ -49,7 +52,10 @@ namespace rn {
         for (size_t i = 0; i < mViewProjectionBuffers.size(); i++) {
             vkDestroyBuffer(mDevices.logicalDevice, mViewProjectionBuffers[i], nullptr);
             vkFreeMemory(mDevices.logicalDevice, mViewProjectionMemory[i], nullptr);
+            vkDestroyBuffer(mDevices.logicalDevice, mDynamicBuffers[i], nullptr);
+            vkFreeMemory(mDevices.logicalDevice, mDynamicBufferMemory[i], nullptr);
         }
+        _aligned_free(mModelTransferSpace);
         auto textureIter = mTextureMap.begin();
         while (textureIter != mTextureMap.end()) {
             Texture *texture = textureIter->second;
@@ -57,7 +63,7 @@ namespace rn {
             textureIter++;
         }
         // Just for testing the light make the light in the engine as a game object;
-        delete light;
+        delete mDirectionalLight;
         vkDestroyDescriptorPool(mDevices.logicalDevice, mViewProjectionDescriptorPool, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mSamplerDescriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mViewProjectionDescriptorSetLayout, nullptr);
@@ -202,6 +208,9 @@ namespace rn {
             std::exit(EXIT_FAILURE);
         }
         mDevices.physicalDevice = physicalDeviceList[0];
+        VkPhysicalDeviceProperties physicalDeviceProperties{};
+        vkGetPhysicalDeviceProperties(mDevices.physicalDevice, &physicalDeviceProperties);
+        mBufferMinAlignment = physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
         CreateLogicalDevice(mDevices.physicalDevice);
     }
 
@@ -750,9 +759,13 @@ namespace rn {
 
     void Graphics::Draw() {
         //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
-        List<VkDescriptorSet> descriptorSets{};
-        auto iter = meshObjectList.begin();
+
+        Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
+            List<VkDescriptorSet> descriptorSets{};
+            std::uint32_t currentIndex = std::distance(meshObjectList.begin(), iter);
+            std::uint32_t dynamicOffset = std::uint32_t(mModelMinAlignment) * currentIndex;
+
             VkBuffer vertexBuffer = iter->second->GetVertexBuffer();
             VkBuffer indexBuffer = iter->second->GetIndexBuffer();
 
@@ -760,15 +773,16 @@ namespace rn {
             vkCmdBindVertexBuffers(mCommandBuffer, 0, 1, &vertexBuffer, &offset);
             vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
             // Binding the descriptor sets
-            UpdateViewProjectionBuffersUniformBuffers(mCurrentImageIndex);
-            light->UpdateLightDescriptorSet(mCurrentImageIndex);
+            UpdateMvpUniformBuffers(mCurrentImageIndex, currentIndex, iter->second->GetModelMatrix());
+            if (mDirectionalLight != nullptr) {
+                mDirectionalLight->UpdateLightDescriptorSet(mCurrentImageIndex);
+            }
+
 
             VkDescriptorSet textureDescriptor{};
             Map<std::string, Texture *, std::hash<std::string>>::iterator texIter = mTextureMap.find(
                     (*iter).second->GetTextureId());
             if (texIter == mTextureMap.end()) {
-                LOG_WARN("No Texture Found for the Item {}.. Falling to Default Texture",
-                         (*iter).second->GetTextureId().c_str());
                 textureDescriptor = mTextureMap.find(
                         R"(D:\cProjects\SmallVkEngine\textures\brick.png)")->second->GetTextureDescriptorSet();
             } else {
@@ -777,11 +791,13 @@ namespace rn {
 
             descriptorSets.push_back(mViewProjectionDescriptorSets[mCurrentImageIndex]);
             descriptorSets.push_back(textureDescriptor);
-            descriptorSets.push_back(light->GetLightDescriptorSets(mCurrentImageIndex));
+            if (mDirectionalLight != nullptr) {
+                descriptorSets.push_back(mDirectionalLight->GetLightDescriptorSets(mCurrentImageIndex));
+            }
             vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
                                     descriptorSets.size(),
-                                    descriptorSets.data(), 0,
-                                    nullptr);
+                                    descriptorSets.data(), 1,
+                                    &dynamicOffset);
             vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
             iter++;
         }
@@ -869,7 +885,14 @@ namespace rn {
         viewProjectionBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         viewProjectionBinding.pImmutableSamplers = nullptr;
 
-        List<VkDescriptorSetLayoutBinding> layoutBinding = {viewProjectionBinding};
+        VkDescriptorSetLayoutBinding modelDynamicBinding{};
+        modelDynamicBinding.binding = 1;
+        modelDynamicBinding.descriptorCount = 1;
+        modelDynamicBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        modelDynamicBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        modelDynamicBinding.pImmutableSamplers = nullptr;
+
+        List<VkDescriptorSetLayoutBinding> layoutBinding = {viewProjectionBinding, modelDynamicBinding};
 
         VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -921,7 +944,12 @@ namespace rn {
         viewProjectionPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         viewProjectionPoolSize.descriptorCount = static_cast<std::uint32_t>(mViewProjectionBuffers.size());
 
-        List<VkDescriptorPoolSize> poolSize{viewProjectionPoolSize};
+        VkDescriptorPoolSize modelDynamicBufferPoolSize{};
+        modelDynamicBufferPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        modelDynamicBufferPoolSize.descriptorCount = static_cast<std::uint32_t>(mDynamicBuffers.size());
+
+        List<VkDescriptorPoolSize> poolSize{viewProjectionPoolSize, modelDynamicBufferPoolSize};
+
         VkDescriptorPoolCreateInfo viewProjectionDescriptorCreateInfo{};
         viewProjectionDescriptorCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         viewProjectionDescriptorCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
@@ -969,16 +997,16 @@ namespace rn {
 
     void Graphics::AllocateDescriptorSets() {
         mViewProjectionDescriptorSets.resize(mSwapChainImageViews.size());
-        List<VkDescriptorSetLayout> viewProjectionDescriptorLayouts(mSwapChainImageViews.size(),
-                                                                    mViewProjectionDescriptorSetLayout);
+        List<VkDescriptorSetLayout> mvpDescriptorLayouts(mSwapChainImageViews.size(),
+                                                         mViewProjectionDescriptorSetLayout);
 
-        VkDescriptorSetAllocateInfo projectionViewAllocateInfo{};
-        projectionViewAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        projectionViewAllocateInfo.descriptorSetCount = static_cast<std::uint32_t>(mSwapChainImageViews.size());
-        projectionViewAllocateInfo.pSetLayouts = viewProjectionDescriptorLayouts.data();
-        projectionViewAllocateInfo.descriptorPool = mViewProjectionDescriptorPool;
+        VkDescriptorSetAllocateInfo mvpDescriptorSetAllocateInfo{};
+        mvpDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        mvpDescriptorSetAllocateInfo.descriptorSetCount = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        mvpDescriptorSetAllocateInfo.pSetLayouts = mvpDescriptorLayouts.data();
+        mvpDescriptorSetAllocateInfo.descriptorPool = mViewProjectionDescriptorPool;
 
-        Utility::CheckVulkanError(vkAllocateDescriptorSets(mDevices.logicalDevice, &projectionViewAllocateInfo,
+        Utility::CheckVulkanError(vkAllocateDescriptorSets(mDevices.logicalDevice, &mvpDescriptorSetAllocateInfo,
                                                            mViewProjectionDescriptorSets.data()),
                                   "Failed to allocate the descriptor set for the view and projection matrix");
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
@@ -996,17 +1024,37 @@ namespace rn {
             viewProjectionWriteInfo.pBufferInfo = &viewProjectionBufferInfo;
             viewProjectionWriteInfo.dstSet = mViewProjectionDescriptorSets[i];
 
-            List<VkWriteDescriptorSet> writeInfo{viewProjectionWriteInfo};
+            // Writing the Model dynamic info;
+            VkDescriptorBufferInfo modelBufferInfo{};
+            modelBufferInfo.buffer = mDynamicBuffers[i];
+            modelBufferInfo.offset = 0;
+            modelBufferInfo.range = sizeof(ModelUBO);
+
+            VkWriteDescriptorSet modelWriteInfo{};
+            modelWriteInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            modelWriteInfo.descriptorCount = 1;
+            modelWriteInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            modelWriteInfo.dstBinding = 1;
+            modelWriteInfo.dstArrayElement = 0;
+            modelWriteInfo.pBufferInfo = &modelBufferInfo;
+            modelWriteInfo.dstSet = mViewProjectionDescriptorSets[i];
+
+
+            List<VkWriteDescriptorSet> writeInfo{viewProjectionWriteInfo, modelWriteInfo};
             vkUpdateDescriptorSets(mDevices.logicalDevice, writeInfo.size(), writeInfo.data(),
                                    0, nullptr);
         }
 
     }
 
-    void Graphics::CreateViewProjectionUniformBuffers() {
+    void Graphics::CreateUniformBuffers() {
         mViewProjectionBuffers.resize(mSwapChainImageViews.size());
         mViewProjectionMemory.resize(mSwapChainImageViews.size());
         VkDeviceSize viewProjectionSize = sizeof(ViewProjection);
+
+        mDynamicBuffers.resize(mSwapChainImageViews.size());
+        mDynamicBufferMemory.resize(mSwapChainImageViews.size());
+        VkDeviceSize dynamicBufferSize = sizeof(ModelUBO) * Utility::MAX_OBJECTS;
 
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
             std::string viewProjectionBufferName = "View Projection Buffer";
@@ -1014,16 +1062,38 @@ namespace rn {
                                   mViewProjectionMemory[i],
                                   (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
                                   viewProjectionSize, viewProjectionBufferName);
+            std::string dynamicBufferName = "Model Dynamic Buffer";
+            Utility::CreateBuffer(mRendererContext, mDynamicBuffers[i], (VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT),
+                                  mDynamicBufferMemory[i],
+                                  (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+                                  dynamicBufferSize, dynamicBufferName);
         }
     }
 
-    void Graphics::UpdateViewProjectionBuffersUniformBuffers(size_t currentImageIndex) {
+
+    void
+    Graphics::UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model) {
         void *data;
         // Updating the view and model matrix;
         vkMapMemory(mDevices.logicalDevice, mViewProjectionMemory[currentImageIndex], 0, sizeof(ViewProjection), 0,
                     &data);
         memcpy(data, &mViewProjection, sizeof(ViewProjection));
         vkUnmapMemory(mDevices.logicalDevice, mViewProjectionMemory[currentImageIndex]);
+
+        // Updating the Model Matrix;
+        // Getting the current Mesh Model Memory Index;
+        ModelUBO *pModel = (ModelUBO *) ((std::uint64_t) mModelTransferSpace + currentObjectIndex * mModelMinAlignment);
+        pModel->model = model;
+        vkMapMemory(mDevices.logicalDevice, mDynamicBufferMemory[currentImageIndex],
+                    currentObjectIndex * mModelMinAlignment, sizeof(ModelUBO), 0, &data);
+        memcpy(data, pModel, sizeof(ModelUBO));
+        vkUnmapMemory(mDevices.logicalDevice, mDynamicBufferMemory[currentImageIndex]);
+    }
+
+    void Graphics::AllocateDynamicBufferTransferSpace() {
+        mModelMinAlignment = (sizeof(ModelUBO) + mBufferMinAlignment - 1) & ~(mBufferMinAlignment - 1);
+        mModelTransferSpace = (ModelUBO *) _aligned_malloc(mModelMinAlignment * Utility::MAX_OBJECTS,
+                                                           mModelMinAlignment);
     }
 
     ViewProjection Graphics::mViewProjection = {};
@@ -1118,8 +1188,12 @@ namespace rn {
         mTextureMap.insert({defaultTexturePath, defaultTexture});
 
         // Testing the default lights;
-        OmniDirectionalInfo testInfo = {{0, -0.5, -1}, {1, 1, 1, 0}, .5f, .5};
-        light = new OmniDirectionalLight{"test", &mRendererContext, testInfo};
+//        OmniDirectionalInfo testInfo = {{0, -0.5, -1, 0}, {1, 1, 1, 0}, {.5, 0.5, 0, 0}};
+//        mDirectionalLight = new OmniDirectionalLight{"test", &mRendererContext, testInfo};
+    }
+
+    void Graphics::SetUpDirectionalLight(OmniDirectionalLight *directionalLight) {
+        mDirectionalLight = directionalLight;
     }
 
 #pragma endregion
