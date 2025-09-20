@@ -26,6 +26,8 @@ add_library(${RENDERER} STATIC
         include/stb_image.h
         include/lights/OmniDirectionalLight.h
         src/lights/OmniDirectionalLight.cpp
+        include/lights/ShadowMap.h
+        src/lights/ShadowMap.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

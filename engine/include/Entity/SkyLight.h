@@ -24,6 +24,8 @@ namespace vk {
 
         // Getters
         const rn::OmniDirectionalInfo &GetLightInfo() const { return mDirectionalLightInfo; };
+
+        rn::OmniDirectionalLight *GetDirectionalLight() const { return mDirectionalLight; };
     };
 }
 #endif //SMALLVKENGINE_SKYLIGHT_H

@@ -6,6 +6,7 @@
 #define SMALLVKENGINE_MAINWINDOW_H
 #define GLFW_INCLUDE_VULKAN
 
+#include <lights/ShadowMap.h>
 #include "GLFW/glfw3.h"
 #include "Graphics.h"
 #include "Delegate.h"
@@ -24,6 +25,8 @@ namespace vk {
         Camera *mDefaultCamera;
         std::shared_ptr<Delegate<>> mRenderLoopDelegate = std::make_shared<Delegate<>>();
         std::shared_ptr<Delegate<float>> mRenderLoopTickDelegate = std::make_shared<Delegate<float>>();
+
+        rn::ShadowMap *testMap{nullptr};
 
         void Init(int width, int height, const char *title);
 

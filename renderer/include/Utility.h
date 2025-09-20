@@ -24,7 +24,7 @@ namespace rn {
         glm::vec2 uv;
         glm::vec3 normals;
     };
-    struct ViewProjection {
+    struct alignas(16) ViewProjection {
         glm::mat4 projection;
         glm::mat4 view;
     };
@@ -32,10 +32,12 @@ namespace rn {
         glm::mat4 model;
     };
 
-    struct OmniDirectionalInfo {
-        alignas(16) glm::vec4 position;
-        alignas(16) glm::vec4 color;
-        alignas(16) glm::vec4 intensities;
+    struct alignas(16) OmniDirectionalInfo {
+        glm::mat4 projection;
+        glm::mat4 view;
+        glm::vec4 position;
+        glm::vec4 color;
+        glm::vec4 intensities;
     };
 
     struct RendererContext {
@@ -50,8 +52,16 @@ namespace rn {
         VkSampler textureSampler;
         VkDescriptorSetLayout lightsLayout;
         VkDescriptorPool lightsDescriptorPool;
+        VkDescriptorSet shadowDescriptorSet;
+
+        VkSwapchainKHR swapchain;
+        VkFormat swapChainFormat;
+        List<VkImageView> *swapChainImageViews;
+        VkExtent2D windowExtents;
 
         void (*RegisterMesh)(std::string &id, class StaticMesh *);
+
+        Map<std::string, class StaticMesh *, std::hash<std::string>> *(*GetSceneObjectMap)();
 
         class Texture *(*RegisterTexture)(std::string &texturePathId);
 
@@ -118,6 +128,8 @@ namespace rn {
 
         static void CreateImageView(VkDevice logicalDevice, VkImage &image, VkFormat format, VkImageView &imageView,
                                     unsigned int imageAspect);
+
+        static VkShaderModule CreateShaderModule(VkDevice logicalDevice, const char *filePath);
     };
 }
 #endif //SMALLVKENGINE_UTILITY_H

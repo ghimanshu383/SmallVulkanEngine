@@ -16,6 +16,7 @@ namespace vk {
 
     void Camera::Init() {
         mProjectionMatrix = glm::perspective(glm::radians(45.f), (800.f) / 600.f, 0.1f, 100.f);
+        mProjectionMatrix[1][1] *= -1;
         Update();
         mMainWindow->GetRenderLoopDelegate()->Register<Camera>(this, &Camera::RegisterEvents);
     }

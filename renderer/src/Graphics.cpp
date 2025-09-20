@@ -8,6 +8,7 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
 #include "lights/OmniDirectionalLight.h"
+#include "lights/ShadowMap.h"
 
 
 namespace rn {
@@ -619,11 +620,19 @@ namespace rn {
         CreateTextureDefaultSampler();
 
         List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout,
-                                               mLightsDescriptorSetLayout};
+                                               mLightsDescriptorSetLayout, mShadowLayout};
+
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(glm::mat4);
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
         VkPipelineLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutCreateInfo.setLayoutCount = setLayouts.size();
         layoutCreateInfo.pSetLayouts = setLayouts.data();
+        layoutCreateInfo.pushConstantRangeCount = 1;
+        layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
         Utility::CheckVulkanError(
                 vkCreatePipelineLayout(mDevices.logicalDevice, &layoutCreateInfo, nullptr, &mPipelineLayout),
@@ -759,7 +768,11 @@ namespace rn {
 
     void Graphics::Draw() {
         //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
-
+        // Setting the Shadow Scene Render Pass before the draw calls
+        if (mDirectionalLight != nullptr) {
+            mDirectionalLight->GetShadowMap()->BeginShadowFrame();
+            mDirectionalLight->GetShadowMap()->EndShadowFrame();
+        }
         Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
             List<VkDescriptorSet> descriptorSets{};
@@ -774,10 +787,10 @@ namespace rn {
             vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
             // Binding the descriptor sets
             UpdateMvpUniformBuffers(mCurrentImageIndex, currentIndex, iter->second->GetModelMatrix());
+
             if (mDirectionalLight != nullptr) {
                 mDirectionalLight->UpdateLightDescriptorSet(mCurrentImageIndex);
             }
-
 
             VkDescriptorSet textureDescriptor{};
             Map<std::string, Texture *, std::hash<std::string>>::iterator texIter = mTextureMap.find(
@@ -793,7 +806,11 @@ namespace rn {
             descriptorSets.push_back(textureDescriptor);
             if (mDirectionalLight != nullptr) {
                 descriptorSets.push_back(mDirectionalLight->GetLightDescriptorSets(mCurrentImageIndex));
+                //   descriptorSets.push_back(mDirectionalLight->GetViewProjectionDescriptorSets(mCurrentImageIndex));
+                descriptorSets.push_back(mShadowDescriptorSet);
             }
+            vkCmdPushConstants(mCommandBuffer, mPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
+                               &iter->second->GetModelMatrix());
             vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
                                     descriptorSets.size(),
                                     descriptorSets.data(), 1,
@@ -806,16 +823,24 @@ namespace rn {
 
     void Graphics::EndFrame() {
         EndCommand();
+        // TODO :  Add The Semaphore for the Light Shadow Map when the Initialized
         VkSubmitInfo commandSubmitInfo{};
+
+        List<VkSemaphore> waitSemaphores{mGetImageSemaphore};
+        List<VkPipelineStageFlags> waitStageFlags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        if (mDirectionalLight != nullptr) {
+            waitSemaphores.push_back(mDirectionalLight->GetShadowMap()->GetShadowMapSemaphore());
+            waitStageFlags.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        }
         VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         commandSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         commandSubmitInfo.commandBufferCount = 1;
         commandSubmitInfo.pCommandBuffers = &mCommandBuffer;
-        commandSubmitInfo.waitSemaphoreCount = 1;
-        commandSubmitInfo.pWaitSemaphores = &mGetImageSemaphore;
+        commandSubmitInfo.waitSemaphoreCount = waitSemaphores.size();
+        commandSubmitInfo.pWaitSemaphores = waitSemaphores.data();
         commandSubmitInfo.signalSemaphoreCount = 1;
         commandSubmitInfo.pSignalSemaphores = &mPresentImageSemaphore;
-        commandSubmitInfo.pWaitDstStageMask = &stageFlags;
+        commandSubmitInfo.pWaitDstStageMask = waitStageFlags.data();
 
         Utility::CheckVulkanError(vkQueueSubmit(mGraphicsQueue, 1, &commandSubmitInfo, mPresentFinishFence),
                                   "Failed to submit the command to the queue");
@@ -927,6 +952,13 @@ namespace rn {
         lightsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         lightsLayoutBinding.pImmutableSamplers = nullptr;
 
+//        VkDescriptorSetLayoutBinding lightViewProjectionBinding{};
+//        lightViewProjectionBinding.binding = 1;
+//        lightViewProjectionBinding.descriptorCount = 1;
+//        lightViewProjectionBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+//        lightViewProjectionBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+//        lightViewProjectionBinding.pImmutableSamplers = nullptr;
+
         List<VkDescriptorSetLayoutBinding> lightsLayoutBindings{lightsLayoutBinding};
         VkDescriptorSetLayoutCreateInfo lightsLayoutCreateInfo{};
         lightsLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -937,6 +969,24 @@ namespace rn {
                                                               &mLightsDescriptorSetLayout),
                                   "Failed to create the descriptor set layouts for lights");
         mRendererContext.lightsLayout = mLightsDescriptorSetLayout;
+
+        // Creating the Shadow Descriptor Layout
+        VkDescriptorSetLayoutBinding shadowLayoutBinding{};
+        shadowLayoutBinding.binding = 0;
+        shadowLayoutBinding.descriptorCount = 1;
+        shadowLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        shadowLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        shadowLayoutBinding.pImmutableSamplers = nullptr;
+
+        VkDescriptorSetLayoutCreateInfo shadowLayoutCreateInfo{};
+        shadowLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        shadowLayoutCreateInfo.bindingCount = 1;
+        shadowLayoutCreateInfo.pBindings = &shadowLayoutBinding;
+        shadowLayoutCreateInfo.flags = 0;
+
+        Utility::CheckVulkanError(
+                vkCreateDescriptorSetLayout(mDevices.logicalDevice, &shadowLayoutCreateInfo, nullptr, &mShadowLayout),
+                "Failed to create the Shadow layout ");
     }
 
     void Graphics::CreateDescriptorPool() {
@@ -984,7 +1034,7 @@ namespace rn {
         List<VkDescriptorPoolSize> lightsDescriptorPoolSizes{lightsPoolSize};
         VkDescriptorPoolCreateInfo lightsPoolCreateInfo{};
         lightsPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        lightsPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        lightsPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size()) * 2;
         lightsPoolCreateInfo.poolSizeCount = lightsDescriptorPoolSizes.size();
         lightsPoolCreateInfo.pPoolSizes = lightsDescriptorPoolSizes.data();
 
@@ -993,6 +1043,22 @@ namespace rn {
                 "Failed to create the descriptor pool for lights");
 
         mRendererContext.lightsDescriptorPool = mLightDescriptorPool;
+
+        // Create the Descriptor Pool For the Shadow Mapping;
+        VkDescriptorPoolSize shadowSamplerPoolSize{};
+        shadowSamplerPoolSize.descriptorCount = 1;
+        shadowSamplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+        VkDescriptorPoolCreateInfo shadowSamplerPoolCreateInfo{};
+        shadowSamplerPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        shadowSamplerPoolCreateInfo.maxSets = 1;
+        shadowSamplerPoolCreateInfo.poolSizeCount = 1;
+        shadowSamplerPoolCreateInfo.pPoolSizes = &shadowSamplerPoolSize;
+        shadowSamplerPoolCreateInfo.flags = 0;
+
+        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &shadowSamplerPoolCreateInfo, nullptr,
+                                                         &mShadowDescriptorPool),
+                                  "Failed to create the descriptor pool for shadows");
     }
 
     void Graphics::AllocateDescriptorSets() {
@@ -1044,6 +1110,16 @@ namespace rn {
             vkUpdateDescriptorSets(mDevices.logicalDevice, writeInfo.size(), writeInfo.data(),
                                    0, nullptr);
         }
+        // Allocating the descriptor set for the shadow Mapping.
+
+
+        VkDescriptorSetAllocateInfo shadowAllocateInfo{};
+        shadowAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        shadowAllocateInfo.descriptorSetCount = 1;
+        shadowAllocateInfo.descriptorPool = mShadowDescriptorPool;
+        shadowAllocateInfo.pSetLayouts = &mShadowLayout;
+        vkAllocateDescriptorSets(mDevices.logicalDevice, &shadowAllocateInfo, &mShadowDescriptorSet);
+        mRendererContext.shadowDescriptorSet = mShadowDescriptorSet;
 
     }
 
@@ -1194,6 +1270,10 @@ namespace rn {
 
     void Graphics::SetUpDirectionalLight(OmniDirectionalLight *directionalLight) {
         mDirectionalLight = directionalLight;
+    }
+
+    Map<std::string, StaticMesh *, std::hash<std::string>> *Graphics::GetSceneObjectMap() {
+        return &meshObjectList;
     }
 
 #pragma endregion

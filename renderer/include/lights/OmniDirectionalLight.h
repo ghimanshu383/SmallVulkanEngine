@@ -15,6 +15,9 @@ namespace rn {
         List<VkDeviceMemory> mLightBufferMemory{};
         List<VkDescriptorSet> mLightDescriptorSets{};
         struct OmniDirectionalInfo mLightInfo;
+        struct ViewProjection mViewProjection{};
+
+        class ShadowMap *mShadowMap;
 
         void CreateLightBuffers();
 
@@ -33,6 +36,13 @@ namespace rn {
 
         const VkDescriptorSet
         GetLightDescriptorSets(size_t currentImageIndex) const { return mLightDescriptorSets[currentImageIndex]; };
+
+        const ViewProjection &GetLightViewProjection() const { return mViewProjection; };
+
+        void CreateShadowMap();
+
+        // Get The ShadowMap
+        ShadowMap *GetShadowMap() const;
     };
 }
 #endif //SMALLVKENGINE_OMNIDIRECTIONALLIGHT_H

@@ -18,6 +18,7 @@
 #include <functional>
 #include <string_view>
 #include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/matrix_projection.hpp>
 #include <glm/ext.hpp>
 #include <vector>

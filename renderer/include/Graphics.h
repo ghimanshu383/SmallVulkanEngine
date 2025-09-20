@@ -100,6 +100,11 @@ namespace rn {
         static class OmniDirectionalLight *mDirectionalLight;
 
 #pragma endregion
+#pragma region Shadow
+        VkDescriptorSetLayout mShadowLayout{};
+        VkDescriptorSet mShadowDescriptorSet{};
+        VkDescriptorPool mShadowDescriptorPool{};
+#pragma endregion
     public:
         // Functions
 #pragma region Common
@@ -139,6 +144,11 @@ namespace rn {
             mRendererContext.UpdateViewAndProjectionMatrix = &SetViewProjection;
             mRendererContext.RegisterTexture = &RegisterTexture;
             mRendererContext.SetUpAsDirectionalLight = &SetUpDirectionalLight;
+            mRendererContext.GetSceneObjectMap = &GetSceneObjectMap;
+            mRendererContext.swapChainFormat = mSurfaceFormat.format;
+            mRendererContext.swapChainImageViews = &mSwapChainImageViews;
+            mRendererContext.swapchain = mSwapChain;
+            mRendererContext.windowExtents = mWindowExtent;
 
         }
 
@@ -147,6 +157,8 @@ namespace rn {
         }
 
         const RendererContext &GetRendererContext() const { return mRendererContext; };
+
+        static Map<std::string, class StaticMesh *, std::hash<std::string>> *GetSceneObjectMap();
 
 #pragma endregion
 #pragma region Instance_and_Validations

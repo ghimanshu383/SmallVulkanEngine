@@ -23,9 +23,12 @@ namespace rn {
             glm::vec3 normalVecTwo = {verOne.pos - vertThree.pos};
             glm::vec3 normal = glm::normalize(glm::cross(normalVecOne, normalVecTwo));
 
-            verOne.normals = normal;
-            vertTwo.normals = normal;
-            vertThree.normals = normal;
+            verOne.normals += normal;
+            vertTwo.normals += normal;
+            vertThree.normals += normal;
+        }
+        for (Vertex &vert: mVertList) {
+            vert.normals = glm::normalize(vert.normals);
         }
     }
 

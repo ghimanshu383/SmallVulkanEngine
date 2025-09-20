@@ -73,6 +73,8 @@ namespace rn {
         }
 
         const glm::mat4 &GetModelMatrix() const { return mModelMatrix; }
+
+        List<Vertex> &GetVertexList() { return mVertList; };
     };
 }
 #endif //SMALLVKENGINE_STATICMESH_H

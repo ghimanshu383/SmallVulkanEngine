@@ -17,15 +17,27 @@ namespace vk {
 
     class ModelComponent : public Component {
     private:
-        List<std::shared_ptr<class MeshComponent>> mMeshCompList;
-        static List<std::string> mTextures ;
+        std::string mFileName;
+        List<std::shared_ptr<class MeshComponent>> mMeshCompList{};
+        List<std::string> mTextureNames{};
+        List<std::shared_ptr<class TextureComponent>> mTextures{};
 
     public:
         ModelComponent(class GameObject *gameObject, const std::string &id, const std::string &objectFile);
 
         bool LoadModel(const std::string &fileName);
 
-        static void LoadTextureMaterials(const aiScene *scene, List<std::string> &textureList);
+        virtual void BeginPlay() override;
+
+        virtual void Tick(float DeltaTime) override;
+
+        void LoadTextureMaterials(const aiScene *scene,
+                                  List<std::shared_ptr<class TextureComponent>> &textureList,
+                                  List<std::string> &textureNames);
+
+        void LoadNode(const aiNode *node, const aiScene *scene, List<std::shared_ptr<MeshComponent>> &meshList);
+
+        void LoadMesh(aiMesh *mesh, List<std::shared_ptr<MeshComponent>>  &meshList);
 
         const std::shared_ptr<MeshComponent> GetMeshComponent(std::uint32_t index) const;
 

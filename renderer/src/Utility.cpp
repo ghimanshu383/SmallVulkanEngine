@@ -228,4 +228,19 @@ namespace rn {
                              1, &imageMemoryBarrier);
         SubmitCommandBuffer(ctx, commandBuffer);
     }
+
+    VkShaderModule Utility::CreateShaderModule(VkDevice logicalDevice, const char *filePath) {
+        VkShaderModule module{};
+        List<uint8_t> moduleCode{};
+        VkShaderModuleCreateInfo moduleCreateInfo{};
+        Utility::ReadFileBinary(filePath, moduleCode);
+
+        moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        moduleCreateInfo.codeSize = moduleCode.size();
+        moduleCreateInfo.pCode = reinterpret_cast<std::uint32_t *>(moduleCode.data());
+
+        Utility::CheckVulkanError(vkCreateShaderModule(logicalDevice, &moduleCreateInfo, nullptr, &module),
+                                  "Failed to create the Shader Module");
+        return module;
+    }
 }
