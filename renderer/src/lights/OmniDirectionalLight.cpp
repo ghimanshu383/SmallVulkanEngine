@@ -13,18 +13,7 @@ namespace rn {
                                                                                       mShadowMap{nullptr} {
         CreateLightBuffers();
         CreateLightDescriptorSets();
-        float orthoSize = 5.0f; // Adjust to cover your scene
-
-        mLightInfo.projection = glm::orthoZO(-orthoSize, orthoSize, -orthoSize, orthoSize, .1f, 20.f);
-//        mLightInfo.projection = glm::perspective(glm::radians(45.0f),
-//                                                 (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
-//                                                 .1f, 100.f);
-        mLightInfo.projection[1][1] *= -1;
-        glm::vec3 lightPos = glm::vec3(mLightInfo.position);
-        mLightInfo.view = glm::lookAt(lightPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-
-        mViewProjection.projection = mLightInfo.projection;
-        mViewProjection.view = mLightInfo.view;
+        ComputeViewProjection();
         CreateShadowMap();
     }
 
@@ -86,7 +75,6 @@ namespace rn {
     }
 
     void OmniDirectionalLight::UpdateLightDescriptorSet(size_t currentImageIndex) {
-        LOG_INFO("sizeof struct {}", sizeof(OmniDirectionalInfo));
         void *data;
         vkMapMemory(mCtx->logicalDevice, mLightBufferMemory[currentImageIndex], 0, sizeof(OmniDirectionalInfo), 0,
                     &data);
@@ -101,5 +89,24 @@ namespace rn {
 
     ShadowMap *OmniDirectionalLight::GetShadowMap() const {
         return mShadowMap;
+    }
+
+    void OmniDirectionalLight::ComputeViewProjection() {
+        float orthoSize = 5.0f; // Adjust to cover your scene
+        mLightInfo.projection = glm::orthoZO(-orthoSize, orthoSize, -orthoSize, orthoSize, .1f, 20.f);
+//        mLightInfo.projection = glm::perspective(glm::radians(45.0f),
+//                                                 (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
+//                                                 .1f, 100.f);
+        mLightInfo.projection[1][1] *= -1;
+        glm::vec3 lightPos = glm::vec3(mLightInfo.position);
+        mLightInfo.view = glm::lookAt(lightPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+
+        mViewProjection.projection = mLightInfo.projection;
+        mViewProjection.view = mLightInfo.view;
+    }
+
+    ViewProjection &OmniDirectionalLight::GetLightViewProjection() {
+        ComputeViewProjection();
+        return mViewProjection;
     }
 }

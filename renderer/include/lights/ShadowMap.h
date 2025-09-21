@@ -77,6 +77,8 @@ namespace rn {
 
         void CreateSampler();
 
+        void ReCreateResourcesForWindowResize();
+
         const VkSemaphore &GetShadowMapSemaphore() const { return mShadowMapSemaphore; };
 
         void CreateDebugTransitions();

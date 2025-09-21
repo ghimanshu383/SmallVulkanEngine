@@ -7,23 +7,34 @@
 #include "Core/InputSystem.h"
 
 namespace vk {
-    Camera::Camera(MainWindow *mainWindow, glm::vec3 position, float moveSpeed, float turnSpeed, float startYaw,
+    Camera::Camera(MainWindow *mainWindow, rn::RendererContext *ctx, glm::vec3 position, float moveSpeed,
+                   float turnSpeed, float startYaw,
                    float startPitch) :
-            mMainWindow{mainWindow}, mPosition(position), mMoveSpeed{moveSpeed}, mTurnSpeed{turnSpeed},
+            mMainWindow{mainWindow}, mCtx{ctx}, mPosition(position), mMoveSpeed{moveSpeed}, mTurnSpeed{turnSpeed},
             mPitch{startPitch}, mYaw{startYaw} {
 
     }
 
     void Camera::Init() {
-        mProjectionMatrix = glm::perspective(glm::radians(45.f), (800.f) / 600.f, 0.1f, 100.f);
+        mProjectionMatrix = glm::perspective(glm::radians(45.f),
+                                             (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
+                                             0.1f, 100.f);
         mProjectionMatrix[1][1] *= -1;
         Update();
         mMainWindow->GetRenderLoopDelegate()->Register<Camera>(this, &Camera::RegisterEvents);
+
     }
 
     bool Camera::RegisterEvents() {
+
+        mProjectionMatrix = glm::perspective(glm::radians(45.f),
+                                             (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
+                                             0.1f, 100.f);
+        mProjectionMatrix[1][1] *= -1;
+
         KeyEventListener(InputSystem::GetInstance()->GetKeys());
-        mMainWindow->GetRendererContext().UpdateViewAndProjectionMatrix({mProjectionMatrix, mViewMatrix});
+
+        mMainWindow->GetRendererContext()->UpdateViewAndProjectionMatrix({mProjectionMatrix, mViewMatrix});
         return true;
     }
 

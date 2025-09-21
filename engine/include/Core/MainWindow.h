@@ -20,7 +20,7 @@ namespace vk {
     private:
         GLFWwindow *mWindow;
         rn::Graphics *mGraphics = nullptr;
-        rn::RendererContext mCtx;
+        rn::RendererContext *mCtx;
         Scene *mDefaultScene;
         Camera *mDefaultCamera;
         std::shared_ptr<Delegate<>> mRenderLoopDelegate = std::make_shared<Delegate<>>();
@@ -48,7 +48,7 @@ namespace vk {
 
         const std::shared_ptr<Delegate<float>> GetRenderLoopTickDelegate() const { return mRenderLoopTickDelegate; };
 
-        const rn::RendererContext &GetRendererContext() const { return mCtx; }
+         rn::RendererContext* GetRendererContext() const { return mCtx; }
 
         // Clean UP
         void DeleteGraphics() {

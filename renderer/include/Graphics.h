@@ -156,7 +156,7 @@ namespace rn {
             meshObjectList.insert({id, meshObject});
         }
 
-        const RendererContext &GetRendererContext() const { return mRendererContext; };
+        RendererContext *GetRendererContext() const { return &mRendererContext; };
 
         static Map<std::string, class StaticMesh *, std::hash<std::string>> *GetSceneObjectMap();
 
@@ -220,6 +220,8 @@ namespace rn {
 
         void CreateSwapChain();
 
+        void ReCreateSwapChain();
+
 #pragma endregion
 #pragma region Pipeline
 
@@ -245,7 +247,7 @@ namespace rn {
 
         void EndCommand();
 
-        void BeginFrame();
+        bool BeginFrame();
 
         void Draw();
 

@@ -34,7 +34,7 @@ namespace vk {
             std::exit(EXIT_FAILURE);
         }
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         mWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
         if (!mWindow) {
@@ -63,9 +63,12 @@ namespace vk {
             ImGui::Text("This is a test window");
             ImGui::End();
             ImGui::Render();
-            mGraphics->BeginFrame();
-            mGraphics->Draw();
-            mGraphics->EndFrame();
+
+            if (mGraphics->BeginFrame()) {
+                mGraphics->Draw();
+                mGraphics->EndFrame();
+            }
+
 //s
         }
         delete mGraphics;
@@ -84,8 +87,8 @@ namespace vk {
         mGraphics = new rn::Graphics(mWindow);
         mCtx = mGraphics->GetRendererContext();
 
-        mDefaultScene = new Scene{&mCtx};
-        mDefaultCamera = new Camera{this, glm::vec3{0, 1, -6}, .005f, .1f, 90.f, 0.f};
+        mDefaultScene = new Scene{mCtx};
+        mDefaultCamera = new Camera{this, mCtx, glm::vec3{0, 1, -6}, .005f, .1f, 90.f, 0.f};
         mDefaultCamera->Init();
 
         List<rn::Vertex> vertOne = {{glm::vec3{-0.5, -1, 0}, {1, 0, 0, 1}, {0, 1}},
@@ -161,7 +164,7 @@ namespace vk {
         std::shared_ptr<SkyLight> skyLight = mDefaultScene->SpawnGameObject<SkyLight>("Default Sky Light",
                                                                                       skyLightInfo);
 
-        skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", &mCtx);
+        skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
         //  skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", cubeVertices, cubeIndices, "", true);
         std::shared_ptr<TransformComponent> transformComponent = skyLight->SpawnComponent<TransformComponent>(
                 "Sky Light transform Component");

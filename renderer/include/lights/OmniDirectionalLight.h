@@ -37,12 +37,14 @@ namespace rn {
         const VkDescriptorSet
         GetLightDescriptorSets(size_t currentImageIndex) const { return mLightDescriptorSets[currentImageIndex]; };
 
-        const ViewProjection &GetLightViewProjection() const { return mViewProjection; };
+        ViewProjection &GetLightViewProjection();
 
         void CreateShadowMap();
 
         // Get The ShadowMap
         ShadowMap *GetShadowMap() const;
+
+        void ComputeViewProjection();
     };
 }
 #endif //SMALLVKENGINE_OMNIDIRECTIONALLIGHT_H

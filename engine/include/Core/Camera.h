@@ -5,6 +5,7 @@
 #ifndef SMALLVKENGINE_CAMERA_H
 #define SMALLVKENGINE_CAMERA_H
 
+#include <Utility.h>
 #include "glm/glm.hpp"
 
 namespace vk {
@@ -26,11 +27,13 @@ namespace vk {
         float mPitch;
         float mMoveSpeed;
         float mTurnSpeed;
+        rn::RendererContext *mCtx;
 
         void Update();
 
     public:
-        Camera(MainWindow *mainWindow, glm::vec3 position, float moveSpeed, float turnSpeed, float startYaw,
+        Camera(MainWindow *mainWindow, rn::RendererContext *ctx, glm::vec3 position, float moveSpeed, float turnSpeed,
+               float startYaw,
                float startPitch);
 
         void Init();
@@ -42,6 +45,7 @@ namespace vk {
         const glm::mat4 &GetViewMatrix();
 
         const glm::mat4 &GetProjectionMatrix();
+
     };
 }
 #endif //SMALLVKENGINE_CAMERA_H

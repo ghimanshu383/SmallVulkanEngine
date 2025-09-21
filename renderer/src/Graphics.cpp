@@ -361,8 +361,8 @@ namespace rn {
         }
         glm::ivec2 frameBufferSize{};
         VkExtent2D actualExtent = {
-                static_cast<std::uint32_t>(frameBufferSize.x),
-                static_cast<std::uint32_t>(frameBufferSize.y)
+                mSwapChainProperties.surfaceCapabilities.currentExtent.width,
+                mSwapChainProperties.surfaceCapabilities.currentExtent.height
         };
         actualExtent.width = std::clamp(actualExtent.width,
                                         mSwapChainProperties.surfaceCapabilities.minImageExtent.width,
@@ -378,6 +378,8 @@ namespace rn {
         mSurfaceFormat = ChooseSurfaceFormat();
         mPresentMode = ChoosePresentMode();
         mWindowExtent = GetWindowExtents();
+        mRendererContext.windowExtents = mWindowExtent;
+        mRendererContext.swapChainFormat = mSurfaceFormat.format;
 
         VkSwapchainCreateInfoKHR swapchainCreateInfo{};
         swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -418,6 +420,30 @@ namespace rn {
             Utility::CreateImageView(mDevices.logicalDevice, image, mSurfaceFormat.format, (*iter),
                                      VK_IMAGE_ASPECT_COLOR_BIT);
             iter++;
+        }
+    }
+
+    void Graphics::ReCreateSwapChain() {
+        // This function handles the recreation and resizing of the window and re-creating the frame buffers and image views for the swapchain;
+        vkDeviceWaitIdle(mRendererContext.logicalDevice);
+        // Deleting the previous swapchain;
+        for (int i = 0; i < mSwapChainImageViews.size(); i++) {
+            vkDestroyFramebuffer(mRendererContext.logicalDevice, mFrameBuffers[i], nullptr);
+            vkDestroyImageView(mRendererContext.logicalDevice, mSwapChainImageViews[i], nullptr);
+            vkDestroyImageView(mRendererContext.logicalDevice, mDepthBufferImageViews[i], nullptr);
+            vkDestroyImage(mRendererContext.logicalDevice, mDepthBufferImages[i], nullptr);
+        }
+        vkDestroySwapchainKHR(mRendererContext.logicalDevice, mSwapChain, nullptr);
+
+        mSwapChainImageViews.clear();
+        mFrameBuffers.clear();
+        CreateSwapChain();
+        CreateDepthBufferImages();
+        CreateFrameBuffers();
+//        mViewport = {(float) mWindowExtent.width, (float) mWindowExtent.height};
+//        mScissors = {0, 0, mWindowExtent};
+        if (mDirectionalLight != nullptr) {
+            mDirectionalLight->GetShadowMap()->ReCreateResourcesForWindowResize();
         }
     }
 
@@ -749,8 +775,21 @@ namespace rn {
 
         vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
-        vkCmdSetViewport(mCommandBuffer, 0, 1, &mViewport);
-        vkCmdSetScissor(mCommandBuffer, 0, 1, &mScissors);
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float) mWindowExtent.width;
+        viewport.height = (float) mWindowExtent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = mWindowExtent;
+
+        vkCmdSetViewport(mCommandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(mCommandBuffer, 0, 1, &scissor);
     }
 
     void Graphics::EndCommand() {
@@ -758,17 +797,28 @@ namespace rn {
         Utility::CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the graphics command buffer");
     }
 
-    void Graphics::BeginFrame() {
+    bool Graphics::BeginFrame() {
         vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
-        vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore, nullptr,
-                              &mCurrentImageIndex);
+        VkResult result = vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore,
+                                                nullptr,
+                                                &mCurrentImageIndex);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            ReCreateSwapChain();
+            return false;
+        }
+        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+            LOG_ERROR("Failed to acquire The valid Swapchain Image To Present.. Render Exiting");
+            std::exit(EXIT_FAILURE);
+        }
         BeginCommand(mCurrentImageIndex);
+        return true;
     }
 
     void Graphics::Draw() {
         //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
         // Setting the Shadow Scene Render Pass before the draw calls
+
         if (mDirectionalLight != nullptr) {
             mDirectionalLight->GetShadowMap()->BeginShadowFrame();
             mDirectionalLight->GetShadowMap()->EndShadowFrame();
@@ -853,7 +903,13 @@ namespace rn {
         presentInfo.pSwapchains = &mSwapChain;
         presentInfo.pImageIndices = &mCurrentImageIndex;
 
-        vkQueuePresentKHR(mPresentationQueue, &presentInfo);
+        VkResult presentResult = vkQueuePresentKHR(mPresentationQueue, &presentInfo);
+        if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
+            ReCreateSwapChain();
+        } else if (presentResult != VK_SUCCESS) {
+            LOG_ERROR("Swapchain Present Error.. Render is Exiting");
+            std::exit(EXIT_FAILURE);
+        }
     }
 
     void Graphics::Imgui_vulkan_init() {
