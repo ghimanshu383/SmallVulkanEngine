@@ -29,6 +29,24 @@ namespace rn {
         CreateSampler();
     }
 
+    ShadowMap::~ShadowMap() {
+        vkDestroySemaphore(mCtx->logicalDevice, mShadowMapSemaphore, nullptr);
+        vkDestroySemaphore(mCtx->logicalDevice, mGetNextImageSemaphore, nullptr);
+        vkDestroyFence(mCtx->logicalDevice, mPresentationFinishFence, nullptr);
+        vkDestroyFramebuffer(mCtx->logicalDevice, mShadowFrameBuffer, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, mViewProjectionBuffer, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mViewProjectionMemory, nullptr);
+        vkDestroyImageView(mCtx->logicalDevice, mSceneImageview, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mSceneImage, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mSceneImageMemory, nullptr);
+        vkDestroySampler(mCtx->logicalDevice, mShadowSampler, nullptr);
+        vkDestroyDescriptorSetLayout(mCtx->logicalDevice, mShadowDescriptorLayout, nullptr);
+        vkDestroyDescriptorPool(mCtx->logicalDevice, mShadowDescriptorPool, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mShadowPipelineLayout, nullptr);
+        vkDestroyPipeline(mCtx->logicalDevice, mShadowPipeline, nullptr);
+        vkDestroyRenderPass(mCtx->logicalDevice, mShadowRenderPass, nullptr);
+    }
+
     void ShadowMap::CreatePipeline() {
         VkShaderModule vertexShaderModule = Utility::CreateShaderModule(mCtx->logicalDevice,
                                                                         R"(D:\cProjects\SmallVkEngine\Shaders\shadow.ver.spv)");
@@ -178,6 +196,7 @@ namespace rn {
                                   "Failed to create the pipeline for the shadow map");
 
         vkDestroyShaderModule(mCtx->logicalDevice, vertexShaderModule, nullptr);
+        vkDestroyShaderModule(mCtx->logicalDevice, fragShaderModule, nullptr);
     }
 
     void ShadowMap::CreateRenderPass() {
@@ -641,8 +660,10 @@ namespace rn {
         vkDestroyImageView(mCtx->logicalDevice, mSceneImageview, nullptr);
         vkDestroyImage(mCtx->logicalDevice, mSceneImage, nullptr);
         vkFreeMemory(mCtx->logicalDevice, mSceneImageMemory, nullptr);
-        CreateFrameBuffers();
         vkDestroySampler(mCtx->logicalDevice, mShadowSampler, nullptr);
+        vkDestroyFramebuffer(mCtx->logicalDevice, mShadowFrameBuffer, nullptr);
+        CreateFrameBuffers();
         CreateSampler();
     }
+
 }

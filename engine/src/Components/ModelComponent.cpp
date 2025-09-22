@@ -2,6 +2,7 @@
 // Created by ghima on 14-09-2025.
 //
 #include <fstream>
+#include <Components/TransformComponent.h>
 
 #include "Components/ModelComponent.h"
 #include "Core/Constants.h"
@@ -103,7 +104,6 @@ namespace vk {
                 vertices[i].uv = {0, 0};
             }
         }
-        // Iterator through indices
         for (size_t i = 0; i < mesh->mNumFaces; i++) {
             aiFace face = mesh->mFaces[i];
             // Getting the indices in the indices;

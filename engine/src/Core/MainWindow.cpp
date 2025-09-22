@@ -46,6 +46,8 @@ namespace vk {
         glfwSetKeyCallback(mWindow, &MainWindow::KeyBoardInputCallback);
 
         InitObjects();
+        ImGuiIO &io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     }
 
@@ -59,9 +61,20 @@ namespace vk {
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
+
+            ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+
             ImGui::Begin("New Window");
             ImGui::Text("This is a test window");
             ImGui::End();
+
+            ImGui::Begin("Viewport");
+
+            ImVec2 size = ImVec2((float) mCtx->windowExtents.width, (float) mCtx->windowExtents.height);
+            ImGui::Image((ImTextureID) mCtx->imguiViewPortDescriptors->at(mCtx->currentImageIndex), size);
+
+            ImGui::End();
+
             ImGui::Render();
 
             if (mGraphics->BeginFrame()) {
@@ -126,17 +139,18 @@ namespace vk {
                 // Bottom face
                 4, 5, 1, 4, 1, 0
         };
-//        std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>();
-//
-//        std::string meshName = "Triangle Mesh";
-//
-//        testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\brick.png)", &mCtx);
-//        // testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices, "", true);
-//        std::string tranName = meshName + " Transform";
-//        std::shared_ptr tranComp = testObject->SpawnComponent<TransformComponent>(meshName);
-//        testObject->SpawnComponent<ModelComponent>("Test Comp",
-//                                                   R"(D:\cProjects\SmallVkEngine\models\simpleModels\building-a.obj)");
-//        tranComp->setScale({2, 2, 2});
+        std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>();
+
+        std::string meshName = "Triangle Mesh";
+
+        testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\brick.png)", mCtx);
+        //testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices, "", true);
+        std::string tranName = meshName + " Transform";
+        std::shared_ptr tranComp = testObject->SpawnComponent<TransformComponent>(meshName);
+        testObject->SpawnComponent<ModelComponent>("Test Comp",
+                                                   R"(D:\cProjects\SmallVkEngine\models\simpleModels\building-a.obj)");
+        tranComp->setTranslate({0, 0, -3});
+        tranComp->setScale({2, 2, 2});
 
 
         std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>();
@@ -144,16 +158,18 @@ namespace vk {
         std::shared_ptr<TransformComponent> planTran = plane->SpawnComponent<TransformComponent>(
                 "PlaneTransformComponent");
         planTran->setTranslate({0, 0, 0});
-        planTran->setRotationX(70.f);
-        planTran->setScale({4, 4, 4,});
+        planTran->setRotationX(90.f);
+        planTran->setScale({10, 10, 10,});
 
 
-        std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>();
-        objectTwo->SpawnComponent<MeshComponent>("CubeMesh", cubeVertices, cubeIndices, "", true);
-        std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
-                "ObjectTwoTranComponent");
-        objectTwoTran->setTranslate({0, .25, -2});
-        objectTwoTran->setScale({.5, 0.5, .5});
+//        std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>();
+//        objectTwo->SpawnComponent<MeshComponent>("CubeMesh", cubeVertices, cubeIndices, "", true);
+//        std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
+//                "ObjectTwoTranComponent");
+//        objectTwoTran->setTranslate({0, .25, -2});
+//        objectTwoTran->setScale({.5, 0.5, .5});
+
+
         // Setting up the default Directional Light;
         rn::OmniDirectionalInfo skyLightInfo{};
         skyLightInfo.position = {0, 3, -7, 1};

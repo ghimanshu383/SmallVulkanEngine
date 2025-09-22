@@ -51,6 +51,8 @@ namespace rn {
         ShadowMap(RendererContext *ctx, OmniDirectionalLight *light, int width, int height,
                   Map<std::string, StaticMesh *, std::hash<std::string>> *objectMap);
 
+        ~ShadowMap();
+
         void Init();
 
         void CreateRenderPass();

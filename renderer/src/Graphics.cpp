@@ -29,6 +29,7 @@ namespace rn {
         CreateSwapChain();
         CreateDepthBufferImages();
         CreateRenderPass();
+        CreateOffScreenRenderPass();
         CreatePipeline();
         CreateSemaphoresAndFences();
         CreateFrameBuffers();
@@ -43,6 +44,7 @@ namespace rn {
 
         CreateDescriptorPool();
         AllocateDescriptorSets();
+        CreateOffScreenBindings();
         CreateDefaultTexture(R"(D:\cProjects\SmallVkEngine\textures\brick.png)");
 
     }
@@ -65,12 +67,17 @@ namespace rn {
         }
         // Just for testing the light make the light in the engine as a game object;
         delete mDirectionalLight;
+        vkDestroySampler(mDevices.logicalDevice, mTextureSampler, nullptr);
+        vkDestroySampler(mDevices.logicalDevice, mOffScreenImageSampler, nullptr);
+
         vkDestroyDescriptorPool(mDevices.logicalDevice, mViewProjectionDescriptorPool, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mSamplerDescriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mViewProjectionDescriptorSetLayout, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mSamplerDescriptorLayout, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mLightsDescriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mLightDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mShadowLayout, nullptr);
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mShadowDescriptorPool, nullptr);
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -87,6 +94,9 @@ namespace rn {
         for (VkFramebuffer framebuffer: mFrameBuffers) {
             vkDestroyFramebuffer(mDevices.logicalDevice, framebuffer, nullptr);
         }
+        for (VkFramebuffer &framebuffer: mOffScreenFrameBuffers) {
+            vkDestroyFramebuffer(mDevices.logicalDevice, framebuffer, nullptr);
+        }
         vkDestroySemaphore(mDevices.logicalDevice, mPresentImageSemaphore, nullptr);
         vkDestroySemaphore(mDevices.logicalDevice, mGetImageSemaphore, nullptr);
         vkDestroyFence(mDevices.logicalDevice, mPresentFinishFence, nullptr);
@@ -94,14 +104,19 @@ namespace rn {
 
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
             vkDestroyImageView(mDevices.logicalDevice, mSwapChainImageViews[i], nullptr);
+            vkDestroyImageView(mDevices.logicalDevice, mOffScreenImageViews[i], nullptr);
             vkDestroyImageView(mDevices.logicalDevice, mDepthBufferImageViews[i], nullptr);
+
             vkDestroyImage(mDevices.logicalDevice, mDepthBufferImages[i], nullptr);
             vkFreeMemory(mDevices.logicalDevice, mDepthBufferImageMemory[i], nullptr);
+
+            vkDestroyImage(mDevices.logicalDevice, mOffScreenImages[i], nullptr);
+            vkFreeMemory(mDevices.logicalDevice, mOffScreenImageMemory[i], nullptr);
         }
         vkDestroyPipeline(mDevices.logicalDevice, mPipeline, nullptr);
-        vkDestroySampler(mDevices.logicalDevice, mTextureSampler, nullptr);
         vkDestroyPipelineLayout(mDevices.logicalDevice, mPipelineLayout, nullptr);
         vkDestroyRenderPass(mDevices.logicalDevice, mRenderPass, nullptr);
+        vkDestroyRenderPass(mDevices.logicalDevice, mOffScreenRenderPass, nullptr);
         vkDestroySwapchainKHR(mDevices.logicalDevice, mSwapChain, nullptr);
         vkDestroyDevice(mDevices.logicalDevice, nullptr);
         vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
@@ -432,19 +447,38 @@ namespace rn {
             vkDestroyImageView(mRendererContext.logicalDevice, mSwapChainImageViews[i], nullptr);
             vkDestroyImageView(mRendererContext.logicalDevice, mDepthBufferImageViews[i], nullptr);
             vkDestroyImage(mRendererContext.logicalDevice, mDepthBufferImages[i], nullptr);
+            vkFreeMemory(mRendererContext.logicalDevice, mDepthBufferImageMemory[i], nullptr);
+
+            vkDestroyFramebuffer(mRendererContext.logicalDevice, mOffScreenFrameBuffers[i], nullptr);
+            vkDestroyImageView(mRendererContext.logicalDevice, mOffScreenImageViews[i], nullptr);
+            vkDestroyImage(mRendererContext.logicalDevice, mOffScreenImages[i], nullptr);
+            vkFreeMemory(mRendererContext.logicalDevice, mOffScreenImageMemory[i], nullptr);
         }
         vkDestroySwapchainKHR(mRendererContext.logicalDevice, mSwapChain, nullptr);
 
         mSwapChainImageViews.clear();
         mFrameBuffers.clear();
+        mOffScreenFrameBuffers.clear();
+        mOffScreenImageViews.clear();
+        mOffScreenImages.clear();
+        mSwapChainImageViews.clear();
+        mSwapChainImages.clear();
+
         CreateSwapChain();
         CreateDepthBufferImages();
         CreateFrameBuffers();
+        for (VkImage &offScreenImage: mOffScreenImages) {
+            Utility::TransitionImageLayout(mRendererContext, offScreenImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+        }
+        vkDestroySampler(mDevices.logicalDevice, mOffScreenImageSampler, nullptr);
+        CreateOffScreenBindings();
 //        mViewport = {(float) mWindowExtent.width, (float) mWindowExtent.height};
 //        mScissors = {0, 0, mWindowExtent};
         if (mDirectionalLight != nullptr) {
             mDirectionalLight->GetShadowMap()->ReCreateResourcesForWindowResize();
         }
+
     }
 
 #pragma endregion
@@ -500,9 +534,9 @@ namespace rn {
         subpassDescriptionOne.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpassDescriptionOne.colorAttachmentCount = 1;
         subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
-        subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
+        // subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
 
-        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription, depthAttachmentDescription};
+        std::array<VkAttachmentDescription, 1> attachments{colorImageAttachmentDescription};
         std::array<VkSubpassDescription, 1> subPass{subpassDescriptionOne};
         VkRenderPassCreateInfo renderPassCreateInfo{};
         renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -516,6 +550,71 @@ namespace rn {
                 vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mRenderPass),
                 "Failed to create the Render Pass");
 
+    }
+
+    void Graphics::CreateOffScreenRenderPass() {
+        VkAttachmentDescription colorImageAttachmentDescription{};
+
+        colorImageAttachmentDescription.format = mSurfaceFormat.format;
+        colorImageAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorImageAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        colorImageAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorImageAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorImageAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorImageAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorImageAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkAttachmentDescription depthAttachmentDescription{};
+        depthAttachmentDescription.format = mDepthBufferFormat;
+        depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
+
+        // Create the reference for the image attachment for the subpass;
+        VkAttachmentReference colorAttachmentReference{};
+        colorAttachmentReference.attachment = 0;
+        colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentReference depthAttachmentRef{};
+        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpassDescriptionOne{};
+        subpassDescriptionOne.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpassDescriptionOne.colorAttachmentCount = 1;
+        subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
+        subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
+
+        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription, depthAttachmentDescription};
+        std::array<VkSubpassDescription, 1> subPass{subpassDescriptionOne};
+        VkRenderPassCreateInfo renderPassCreateInfo{};
+        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassCreateInfo.attachmentCount = attachments.size();
+        renderPassCreateInfo.pAttachments = attachments.data();
+        renderPassCreateInfo.subpassCount = subPass.size();
+        renderPassCreateInfo.pSubpasses = subPass.data();
+
+        // subpass dependency to handle layout transitions
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        renderPassCreateInfo.dependencyCount = 1;
+        renderPassCreateInfo.pDependencies = &dependency;
+
+        // Create the Render Pass
+        Utility::CheckVulkanError(
+                vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mOffScreenRenderPass),
+                "Failed to create the Render Pass");
     }
 
     void Graphics::CreatePipeline() {
@@ -667,7 +766,7 @@ namespace rn {
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineCreateInfo.renderPass = mRenderPass;
+        pipelineCreateInfo.renderPass = mOffScreenRenderPass;
         pipelineCreateInfo.subpass = 0;
         pipelineCreateInfo.layout = mPipelineLayout;
         pipelineCreateInfo.stageCount = shaderStages.size();
@@ -714,8 +813,13 @@ namespace rn {
 
     void Graphics::CreateFrameBuffers() {
         mFrameBuffers.resize(mSwapChainImageViews.size());
+        mOffScreenFrameBuffers.resize(mSwapChainImageViews.size());
+        mOffScreenImageViews.resize(mSwapChainImageViews.size());
+        mOffScreenImages.resize(mSwapChainImageViews.size());
+        mOffScreenImageMemory.resize(mSwapChainImageViews.size());
+
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
-            std::array<VkImageView, 2> attachments{mSwapChainImageViews[i], mDepthBufferImageViews[i]};
+            std::array<VkImageView, 1> attachments{mSwapChainImageViews[i]};
             VkFramebufferCreateInfo framebufferCreateInfo{};
             framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferCreateInfo.renderPass = mRenderPass;
@@ -728,7 +832,35 @@ namespace rn {
             Utility::CheckVulkanError(
                     vkCreateFramebuffer(mDevices.logicalDevice, &framebufferCreateInfo, nullptr, &mFrameBuffers[i]),
                     "Failed to create the frame buffer for the image view");
+
+            // Creating the frame buffer for the off screen rendering for the imgui view port;
+            mOffScreenImages[i] = Utility::CreateImage("ImGui off-ScreenImage", mDevices.physicalDevice,
+                                                       mDevices.logicalDevice,
+                                                       mWindowExtent.width, mWindowExtent.height, mSurfaceFormat.format,
+                                                       VK_IMAGE_TILING_OPTIMAL,
+                                                       (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                                        VK_IMAGE_USAGE_SAMPLED_BIT),
+                                                       (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), mOffScreenImageMemory[i]);
+            Utility::CreateImageView(mDevices.logicalDevice, mOffScreenImages[i], mSurfaceFormat.format,
+                                     mOffScreenImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
+
+            std::array<VkImageView, 2> offScreenAttachments{mOffScreenImageViews[i], mDepthBufferImageViews[i]};
+
+            VkFramebufferCreateInfo offScreenCreateInfo{};
+            offScreenCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            offScreenCreateInfo.width = mWindowExtent.width;
+            offScreenCreateInfo.height = mWindowExtent.height;
+            offScreenCreateInfo.renderPass = mOffScreenRenderPass;
+            offScreenCreateInfo.attachmentCount = offScreenAttachments.size();
+            offScreenCreateInfo.pAttachments = offScreenAttachments.data();
+            offScreenCreateInfo.layers = 1;
+            offScreenCreateInfo.flags = 0;
+
+            Utility::CheckVulkanError(vkCreateFramebuffer(mDevices.logicalDevice, &offScreenCreateInfo, nullptr,
+                                                          &mOffScreenFrameBuffers[i]),
+                                      "Failed to create the frame buffers for the offscreen rendering");
         }
+
     }
 
     void Graphics::CreateCommandPool() {
@@ -754,7 +886,7 @@ namespace rn {
                                   "Failed to allocate the command buffer");
     }
 
-    void Graphics::BeginCommand(std::uint32_t currentImageIndex) {
+    void Graphics::BeginOffScreenPass(std::uint32_t currentImageIndex) {
         vkResetCommandBuffer(mCommandBuffer, 0);
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -762,13 +894,13 @@ namespace rn {
 
         VkRenderPassBeginInfo renderPassBeginInfo{};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassBeginInfo.renderPass = mRenderPass;
-        renderPassBeginInfo.framebuffer = mFrameBuffers[currentImageIndex];
+        renderPassBeginInfo.renderPass = mOffScreenRenderPass;
+        renderPassBeginInfo.framebuffer = mOffScreenFrameBuffers[currentImageIndex];
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = mWindowExtent;
 
         std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = {{.2f, .2f, .2f}};
+        clearValues[0].color = {{.2f, .2f, .2f, 1.0}};
         clearValues[1].depthStencil.depth = 1;
         renderPassBeginInfo.clearValueCount = clearValues.size();
         renderPassBeginInfo.pClearValues = clearValues.data();
@@ -790,11 +922,27 @@ namespace rn {
 
         vkCmdSetViewport(mCommandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(mCommandBuffer, 0, 1, &scissor);
+
     }
 
-    void Graphics::EndCommand() {
+    void Graphics::EndOffScreenPass() {
         vkCmdEndRenderPass(mCommandBuffer);
-        Utility::CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the graphics command buffer");
+    }
+
+    void Graphics::BeginSwapchainPass(std::uint32_t currentImageIndex) {
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = mRenderPass;
+        renderPassInfo.framebuffer = mFrameBuffers[currentImageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = mWindowExtent;
+
+        std::array<VkClearValue, 1> clearValues{};
+        clearValues[0].color = {{0.2f, 0.2f, 0.2f, 1.0f}};
+        renderPassInfo.clearValueCount = (uint32_t) clearValues.size();
+        renderPassInfo.pClearValues = clearValues.data();
+
+        vkCmdBeginRenderPass(mCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 
     bool Graphics::BeginFrame() {
@@ -811,7 +959,7 @@ namespace rn {
             LOG_ERROR("Failed to acquire The valid Swapchain Image To Present.. Render Exiting");
             std::exit(EXIT_FAILURE);
         }
-        BeginCommand(mCurrentImageIndex);
+        BeginOffScreenPass(mCurrentImageIndex);
         return true;
     }
 
@@ -868,12 +1016,16 @@ namespace rn {
             vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
             iter++;
         }
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), mCommandBuffer);
+
     }
 
     void Graphics::EndFrame() {
-        EndCommand();
-        // TODO :  Add The Semaphore for the Light Shadow Map when the Initialized
+        EndOffScreenPass();
+        mRendererContext.currentImageIndex = mCurrentImageIndex;
+        BeginSwapchainPass(mCurrentImageIndex);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), mCommandBuffer);
+        vkCmdEndRenderPass(mCommandBuffer);
+        Utility::CheckVulkanError(vkEndCommandBuffer(mCommandBuffer), "Failed to end the Command Buffer");
         VkSubmitInfo commandSubmitInfo{};
 
         List<VkSemaphore> waitSemaphores{mGetImageSemaphore};
@@ -1330,6 +1482,56 @@ namespace rn {
 
     Map<std::string, StaticMesh *, std::hash<std::string>> *Graphics::GetSceneObjectMap() {
         return &meshObjectList;
+    }
+
+    void Graphics::CreateOffScreenBindings() {
+        VkSamplerCreateInfo sampInfo{};
+        sampInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampInfo.magFilter = VK_FILTER_LINEAR;
+        sampInfo.minFilter = VK_FILTER_LINEAR;
+        sampInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        sampInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        sampInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        sampInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        sampInfo.maxAnisotropy = 1.0f;
+        sampInfo.compareEnable = VK_FALSE;
+        sampInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        sampInfo.minLod = 0.0f;
+        sampInfo.maxLod = 1.0f;
+
+        List <VkDescriptorSetLayout> layouts(mOffScreenImageViews.size(), ImGui_ImplVulkan_GetDescriptorSetLayout());
+
+        mOffScreenDescriptorSets.resize(mOffScreenImageViews.size());
+        VkDescriptorSetAllocateInfo allocateInfo{};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocateInfo.descriptorPool = mImguiDescriptorPool;
+        allocateInfo.descriptorSetCount = mOffScreenImageViews.size();
+        allocateInfo.pSetLayouts = layouts.data();
+
+        vkAllocateDescriptorSets(mDevices.logicalDevice, &allocateInfo, mOffScreenDescriptorSets.data());
+
+        vkCreateSampler(mDevices.logicalDevice, &sampInfo, nullptr, &mOffScreenImageSampler);
+
+        for (int i = 0; i < mOffScreenImageViews.size(); i++) {
+
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = mOffScreenImageViews[i];
+            imageInfo.sampler = mOffScreenImageSampler;
+
+            VkWriteDescriptorSet writeImage{};
+            writeImage.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeImage.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeImage.descriptorCount = 1;
+            writeImage.dstSet = mOffScreenDescriptorSets[i];
+            writeImage.dstArrayElement = 0;
+            writeImage.pImageInfo = &imageInfo;
+            writeImage.dstBinding = 0;
+
+            vkUpdateDescriptorSets(mDevices.logicalDevice, 1, &writeImage, 0, nullptr);
+        }
+        mRendererContext.imguiViewPortDescriptors = &mOffScreenDescriptorSets;
     }
 
 #pragma endregion

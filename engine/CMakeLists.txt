@@ -25,6 +25,8 @@ add_executable(${ENGINE}
         src/Components/TransformComponent.cpp
         include/Components/ModelComponent.h
         src/Components/ModelComponent.cpp
+        include/Core/ImguiEditor.h
+        src/Core/ImguiEditor.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC

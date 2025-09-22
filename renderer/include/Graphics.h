@@ -58,7 +58,7 @@ namespace rn {
 #pragma endregion
 #pragma region Draw
         std::uint32_t mCurrentImageIndex;
-        List<VkFramebuffer> mFrameBuffers;
+        List<VkImageView> mOffScreenImageViews{};
         VkCommandPool mCommandPool;
         VkCommandBuffer mCommandBuffer;
         VkSemaphore mGetImageSemaphore;
@@ -86,6 +86,7 @@ namespace rn {
         // Lights Descriptor sets;
         VkDescriptorSetLayout mLightsDescriptorSetLayout;
         VkDescriptorPool mLightDescriptorPool;
+
 #pragma endregion
 #pragma region Depth_Buffer
         VkFormat mDepthBufferFormat{};
@@ -104,6 +105,18 @@ namespace rn {
         VkDescriptorSetLayout mShadowLayout{};
         VkDescriptorSet mShadowDescriptorSet{};
         VkDescriptorPool mShadowDescriptorPool{};
+#pragma endregion
+#pragma region OFF_SCREEN
+        VkRenderPass mOffScreenRenderPass{};
+        List<VkImage> mOffScreenImages{};
+        List<VkDeviceMemory> mOffScreenImageMemory{};
+        List<VkFramebuffer> mOffScreenFrameBuffers{};
+        List<VkFramebuffer> mFrameBuffers;
+
+        VkDescriptorSetLayout mOffScreenLayout{};
+        VkDescriptorPool mOffSetDescriptorPool{};
+        VkSampler mOffScreenImageSampler{};
+        List<VkDescriptorSet> mOffScreenDescriptorSets{};
 #pragma endregion
     public:
         // Functions
@@ -225,6 +238,8 @@ namespace rn {
 #pragma endregion
 #pragma region Pipeline
 
+        void CreateOffScreenRenderPass();
+
         void CreateRenderPass();
 
         void CreatePipeline();
@@ -243,9 +258,11 @@ namespace rn {
 
         void AllocateCommandBuffer();
 
-        void BeginCommand(std::uint32_t currentImageIndex);
+        void BeginOffScreenPass(std::uint32_t currentImageIndex);
 
-        void EndCommand();
+        void BeginSwapchainPass(std::uint32_t currentImageIndex);
+
+        void EndOffScreenPass();
 
         bool BeginFrame();
 
@@ -294,6 +311,12 @@ namespace rn {
 
 
 #pragma endregion
+#pragma region OFF_SCREEN
+
+        void CreateOffScreenBindings();
+
+#pragma endregion
+
     };
 }
 #endif //SMALLVKENGINE_GRAPHICS_H

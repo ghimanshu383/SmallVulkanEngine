@@ -22,6 +22,7 @@ namespace rn {
             vkDestroyBuffer(mCtx->logicalDevice, mLightBuffer[i], nullptr);
             vkFreeMemory(mCtx->logicalDevice, mLightBufferMemory[i], nullptr);
         }
+        delete mShadowMap;
     }
 
     void OmniDirectionalLight::CreateLightBuffers() {

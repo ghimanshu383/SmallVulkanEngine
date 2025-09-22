@@ -58,6 +58,8 @@ namespace rn {
         VkFormat swapChainFormat;
         List<VkImageView> *swapChainImageViews;
         VkExtent2D windowExtents;
+        size_t currentImageIndex;
+        List<VkDescriptorSet> *imguiViewPortDescriptors;
 
         void (*RegisterMesh)(std::string &id, class StaticMesh *);
 

@@ -32,15 +32,19 @@ namespace vk {
         }
         mStaticMesh = new rn::StaticMesh{*Component::ctx, mVertexList, mIndexList, mTextureId, mCalculateNormals};
         // Register the object with the Rendering Context for the Graphics context
+        std::shared_ptr<TransformComponent> transformComponent = mOwningGameObject->GetComponentType<TransformComponent>();
+        if (transformComponent != nullptr) {
+            mStaticMesh->SetModelMatrix(transformComponent->GetModelMatrix());
+        }
 
         Component::ctx->RegisterMesh(id, mStaticMesh);
     }
 
     void MeshComponent::Tick(float DeltaTime) {
         Component::Tick(DeltaTime);
-        std::shared_ptr transformComponent = mOwningGameObject->GetComponentType<TransformComponent>();
-        if (transformComponent != nullptr) {
-            mStaticMesh->SetModelMatrix(transformComponent->GetModelMatrix());
-        }
+//        std::shared_ptr transformComponent = mOwningGameObject->GetComponentType<TransformComponent>();
+//        if (transformComponent != nullptr) {
+//            mStaticMesh->SetModelMatrix(transformComponent->GetModelMatrix());
+//        }
     }
 }
