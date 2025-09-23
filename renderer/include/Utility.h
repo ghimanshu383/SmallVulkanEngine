@@ -40,6 +40,16 @@ namespace rn {
         glm::vec4 intensities;
     };
 
+    struct RendererEvent {
+        enum class Type {
+            WINDOW_RESIZE,
+            VIEW_PORT_RESIZE
+        };
+        Type type;
+        uint32_t width;
+        uint32_t height;
+    };
+
     struct RendererContext {
         size_t swapChainImageCount;
         VkPhysicalDevice physicalDevice;
@@ -58,6 +68,7 @@ namespace rn {
         VkFormat swapChainFormat;
         List<VkImageView> *swapChainImageViews;
         VkExtent2D windowExtents;
+        VkExtent2D viewportExtends;
         size_t currentImageIndex;
         List<VkDescriptorSet> *imguiViewPortDescriptors;
 
@@ -70,6 +81,8 @@ namespace rn {
         void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
 
         void (*SetUpAsDirectionalLight)(class OmniDirectionalLight *directionalLight);
+
+        void (*AddRendererEvent)(const RendererEvent &event);
     };
 
 

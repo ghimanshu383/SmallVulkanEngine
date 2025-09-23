@@ -14,6 +14,7 @@
 #include <spdlog/spdlog.h>
 #include <cstdint>
 #include <cstdlib>
+#include <thread>
 #include <string>
 #include <functional>
 #include <string_view>

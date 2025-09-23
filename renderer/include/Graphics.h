@@ -6,6 +6,7 @@
 #define SMALLVKENGINE_GRAPHICS_H
 
 #include "Utility.h"
+#include "BlockingQueue.h"
 
 namespace rn {
     class Graphics {
@@ -13,6 +14,8 @@ namespace rn {
 #pragma region Common
         GLFWwindow *mRenderWindow;
         static RendererContext mRendererContext;
+        static BlockingQueue<RendererEvent> mEventQueue;
+        static std::atomic<bool> mShouldRender;
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -146,6 +149,12 @@ namespace rn {
                         });
         }
 
+        static void StartRenderEventListener();
+
+        static void AddRenderEvent(const RendererEvent &event) {
+            mEventQueue.Push(event);
+        }
+
         void SetRendererContext() {
             mRendererContext.swapChainImageCount = mSwapChainImageViews.size();
             mRendererContext.physicalDevice = mDevices.physicalDevice;
@@ -162,7 +171,8 @@ namespace rn {
             mRendererContext.swapChainImageViews = &mSwapChainImageViews;
             mRendererContext.swapchain = mSwapChain;
             mRendererContext.windowExtents = mWindowExtent;
-
+            mRendererContext.viewportExtends = mWindowExtent;
+            mRendererContext.AddRendererEvent = &AddRenderEvent;
         }
 
         static void RegisterMeshObject(std::string &id, class StaticMesh *meshObject) {
@@ -170,6 +180,8 @@ namespace rn {
         }
 
         RendererContext *GetRendererContext() const { return &mRendererContext; };
+
+        void OnViewPortChange(uint32_t newWidth, uint32_t newHeight);
 
         static Map<std::string, class StaticMesh *, std::hash<std::string>> *GetSceneObjectMap();
 

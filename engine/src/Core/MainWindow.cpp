@@ -2,6 +2,7 @@
 // Created by ghima on 27-08-2025.
 //
 
+#include <Core/ImguiEditor.h>
 #include "Core/MainWindow.h"
 #include "Utility.h"
 #include "Components/MeshComponent.h"
@@ -57,26 +58,8 @@ namespace vk {
             mRenderLoopDelegate->Invoke();
             // Implement the delta Time functionality later;
             mDefaultScene->Tick(1.f);
-
-            ImGui_ImplVulkan_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
-
-            ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
-
-            ImGui::Begin("New Window");
-            ImGui::Text("This is a test window");
-            ImGui::End();
-
-            ImGui::Begin("Viewport");
-
-            ImVec2 size = ImVec2((float) mCtx->windowExtents.width, (float) mCtx->windowExtents.height);
-            ImGui::Image((ImTextureID) mCtx->imguiViewPortDescriptors->at(mCtx->currentImageIndex), size);
-
-            ImGui::End();
-
-            ImGui::Render();
-
+            // Rendering the Imgui Editor;
+            ImguiEditor::GetInstance(mCtx)->RenderGui();
             if (mGraphics->BeginFrame()) {
                 mGraphics->Draw();
                 mGraphics->EndFrame();

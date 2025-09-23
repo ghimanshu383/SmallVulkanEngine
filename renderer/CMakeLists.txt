@@ -28,6 +28,7 @@ add_library(${RENDERER} STATIC
         src/lights/OmniDirectionalLight.cpp
         include/lights/ShadowMap.h
         src/lights/ShadowMap.cpp
+        include/BlockingQueue.h
 )
 
 target_include_directories(${RENDERER} PUBLIC

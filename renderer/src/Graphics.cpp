@@ -17,9 +17,33 @@ namespace rn {
     Map<std::string, Texture *, std::hash<std::string>> Graphics::mTextureMap = {};
     RendererContext Graphics::mRendererContext = {};
     OmniDirectionalLight *Graphics::mDirectionalLight = nullptr;
+    std::atomic<bool> Graphics::mShouldRender = {true};
+    BlockingQueue<RendererEvent> Graphics::mEventQueue = {};
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
+    }
+
+    void Graphics::StartRenderEventListener() {
+        std::thread mEventListenerThread([]() -> void {
+            while (true) {
+                RendererEvent event = mEventQueue.Pop();
+                mShouldRender.store(false, std::memory_order_release);
+                switch (event.type) {
+                    case RendererEvent::Type::WINDOW_RESIZE : {
+                        //mRendererContext.windowExtents = {event.width, event.height};
+                        break;
+                    }
+                    case RendererEvent::Type::VIEW_PORT_RESIZE: {
+                        //mRendererContext.viewportExtends = {event.width, event.height};
+                        LOG_INFO("The Render For Resize View port was fired {}, {}", event.width, event.height);
+                        break;
+                    }
+                }
+                mShouldRender.store(true, std::memory_order_release);
+            }
+        });
+        mEventListenerThread.detach();
     }
 
     void Graphics::InitVulkan() {
@@ -36,6 +60,7 @@ namespace rn {
         CreateCommandPool();
         AllocateCommandBuffer();
         SetRendererContext();
+        StartRenderEventListener();
         Imgui_vulkan_init();
 
         // Setting up the view and projection matrix descriptor sets
@@ -303,10 +328,12 @@ namespace rn {
         deviceFeatures.samplerAnisotropy = VK_TRUE;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
-        Utility::CheckVulkanError(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevices.logicalDevice),
-                                  "Failed to create the logical device from the physical device");
+        Utility::CheckVulkanError(
+                vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevices.logicalDevice),
+                "Failed to create the logical device from the physical device");
         vkGetDeviceQueue(mDevices.logicalDevice, mQueueFamily.graphicsQueueIndex.value(), 0, &mGraphicsQueue);
-        vkGetDeviceQueue(mDevices.logicalDevice, mQueueFamily.presentationQueueIndex.value(), 0, &mPresentationQueue);
+        vkGetDeviceQueue(mDevices.logicalDevice, mQueueFamily.presentationQueueIndex.value(), 0,
+                         &mPresentationQueue);
 
     }
 
@@ -478,6 +505,9 @@ namespace rn {
         if (mDirectionalLight != nullptr) {
             mDirectionalLight->GetShadowMap()->ReCreateResourcesForWindowResize();
         }
+    }
+
+    void Graphics::OnViewPortChange(uint32_t newWidth, uint32_t newHeight) {
 
     }
 
@@ -590,7 +620,8 @@ namespace rn {
         subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
         subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
 
-        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription, depthAttachmentDescription};
+        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription,
+                                                           depthAttachmentDescription};
         std::array<VkSubpassDescription, 1> subPass{subpassDescriptionOne};
         VkRenderPassCreateInfo renderPassCreateInfo{};
         renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -781,7 +812,8 @@ namespace rn {
         pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 
         Utility::CheckVulkanError(
-                vkCreateGraphicsPipelines(mDevices.logicalDevice, nullptr, 1, &pipelineCreateInfo, nullptr, &mPipeline),
+                vkCreateGraphicsPipelines(mDevices.logicalDevice, nullptr, 1, &pipelineCreateInfo, nullptr,
+                                          &mPipeline),
                 "Failed to create the pipeline");
         vkDestroyShaderModule(mDevices.logicalDevice, vertexShaderModule, nullptr);
         vkDestroyShaderModule(mDevices.logicalDevice, fragmentShaderModule, nullptr);
@@ -800,11 +832,13 @@ namespace rn {
         presentImageFenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
         Utility::CheckVulkanError(
-                vkCreateSemaphore(mDevices.logicalDevice, &getImageSemaphoreCreateInfo, nullptr, &mGetImageSemaphore),
+                vkCreateSemaphore(mDevices.logicalDevice, &getImageSemaphoreCreateInfo, nullptr,
+                                  &mGetImageSemaphore),
                 "Failed to create the wait get image semaphore");
-        Utility::CheckVulkanError(vkCreateSemaphore(mDevices.logicalDevice, &presentImageSemaphoreCreateInfo, nullptr,
-                                                    &mPresentImageSemaphore),
-                                  "Failed to create the present Image semaphore");
+        Utility::CheckVulkanError(
+                vkCreateSemaphore(mDevices.logicalDevice, &presentImageSemaphoreCreateInfo, nullptr,
+                                  &mPresentImageSemaphore),
+                "Failed to create the present Image semaphore");
         Utility::CheckVulkanError(
                 vkCreateFence(mDevices.logicalDevice, &presentImageFenceCreateInfo, nullptr, &mPresentFinishFence),
                 "Failed to create the fence for the present Image");
@@ -836,11 +870,13 @@ namespace rn {
             // Creating the frame buffer for the off screen rendering for the imgui view port;
             mOffScreenImages[i] = Utility::CreateImage("ImGui off-ScreenImage", mDevices.physicalDevice,
                                                        mDevices.logicalDevice,
-                                                       mWindowExtent.width, mWindowExtent.height, mSurfaceFormat.format,
+                                                       mWindowExtent.width, mWindowExtent.height,
+                                                       mSurfaceFormat.format,
                                                        VK_IMAGE_TILING_OPTIMAL,
                                                        (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                                         VK_IMAGE_USAGE_SAMPLED_BIT),
-                                                       (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), mOffScreenImageMemory[i]);
+                                                       (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+                                                       mOffScreenImageMemory[i]);
             Utility::CreateImageView(mDevices.logicalDevice, mOffScreenImages[i], mSurfaceFormat.format,
                                      mOffScreenImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -946,6 +982,9 @@ namespace rn {
     }
 
     bool Graphics::BeginFrame() {
+        if (!mShouldRender.load(std::memory_order_acquire)) {
+            return false;
+        }
         vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
         VkResult result = vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore,
@@ -1173,9 +1212,10 @@ namespace rn {
         lightsLayoutCreateInfo.bindingCount = lightsLayoutBindings.size();
         lightsLayoutCreateInfo.pBindings = lightsLayoutBindings.data();
 
-        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mDevices.logicalDevice, &lightsLayoutCreateInfo, nullptr,
-                                                              &mLightsDescriptorSetLayout),
-                                  "Failed to create the descriptor set layouts for lights");
+        Utility::CheckVulkanError(
+                vkCreateDescriptorSetLayout(mDevices.logicalDevice, &lightsLayoutCreateInfo, nullptr,
+                                            &mLightsDescriptorSetLayout),
+                "Failed to create the descriptor set layouts for lights");
         mRendererContext.lightsLayout = mLightsDescriptorSetLayout;
 
         // Creating the Shadow Descriptor Layout
@@ -1193,7 +1233,8 @@ namespace rn {
         shadowLayoutCreateInfo.flags = 0;
 
         Utility::CheckVulkanError(
-                vkCreateDescriptorSetLayout(mDevices.logicalDevice, &shadowLayoutCreateInfo, nullptr, &mShadowLayout),
+                vkCreateDescriptorSetLayout(mDevices.logicalDevice, &shadowLayoutCreateInfo, nullptr,
+                                            &mShadowLayout),
                 "Failed to create the Shadow layout ");
     }
 
@@ -1214,9 +1255,10 @@ namespace rn {
         viewProjectionDescriptorCreateInfo.poolSizeCount = poolSize.size();
         viewProjectionDescriptorCreateInfo.pPoolSizes = poolSize.data();
 
-        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &viewProjectionDescriptorCreateInfo,
-                                                         nullptr, &mViewProjectionDescriptorPool),
-                                  "Failed to create the Descriptor Pool For view and projection");
+        Utility::CheckVulkanError(
+                vkCreateDescriptorPool(mDevices.logicalDevice, &viewProjectionDescriptorCreateInfo,
+                                       nullptr, &mViewProjectionDescriptorPool),
+                "Failed to create the Descriptor Pool For view and projection");
 
         // Create The Sampler Descriptor Set Pool;
         VkDescriptorPoolSize samplerPoolSize{};
@@ -1247,7 +1289,8 @@ namespace rn {
         lightsPoolCreateInfo.pPoolSizes = lightsDescriptorPoolSizes.data();
 
         Utility::CheckVulkanError(
-                vkCreateDescriptorPool(mDevices.logicalDevice, &lightsPoolCreateInfo, nullptr, &mLightDescriptorPool),
+                vkCreateDescriptorPool(mDevices.logicalDevice, &lightsPoolCreateInfo, nullptr,
+                                       &mLightDescriptorPool),
                 "Failed to create the descriptor pool for lights");
 
         mRendererContext.lightsDescriptorPool = mLightDescriptorPool;
@@ -1264,9 +1307,10 @@ namespace rn {
         shadowSamplerPoolCreateInfo.pPoolSizes = &shadowSamplerPoolSize;
         shadowSamplerPoolCreateInfo.flags = 0;
 
-        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &shadowSamplerPoolCreateInfo, nullptr,
-                                                         &mShadowDescriptorPool),
-                                  "Failed to create the descriptor pool for shadows");
+        Utility::CheckVulkanError(
+                vkCreateDescriptorPool(mDevices.logicalDevice, &shadowSamplerPoolCreateInfo, nullptr,
+                                       &mShadowDescriptorPool),
+                "Failed to create the descriptor pool for shadows");
     }
 
     void Graphics::AllocateDescriptorSets() {
@@ -1366,7 +1410,8 @@ namespace rn {
 
         // Updating the Model Matrix;
         // Getting the current Mesh Model Memory Index;
-        ModelUBO *pModel = (ModelUBO *) ((std::uint64_t) mModelTransferSpace + currentObjectIndex * mModelMinAlignment);
+        ModelUBO *pModel = (ModelUBO *) (
+                (std::uint64_t) mModelTransferSpace + currentObjectIndex * mModelMinAlignment);
         pModel->model = model;
         vkMapMemory(mDevices.logicalDevice, mDynamicBufferMemory[currentImageIndex],
                     currentObjectIndex * mModelMinAlignment, sizeof(ModelUBO), 0, &data);
@@ -1500,7 +1545,8 @@ namespace rn {
         sampInfo.minLod = 0.0f;
         sampInfo.maxLod = 1.0f;
 
-        List <VkDescriptorSetLayout> layouts(mOffScreenImageViews.size(), ImGui_ImplVulkan_GetDescriptorSetLayout());
+        List<VkDescriptorSetLayout> layouts(mOffScreenImageViews.size(),
+                                            ImGui_ImplVulkan_GetDescriptorSetLayout());
 
         mOffScreenDescriptorSets.resize(mOffScreenImageViews.size());
         VkDescriptorSetAllocateInfo allocateInfo{};
