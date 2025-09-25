@@ -16,6 +16,7 @@
 #include "Entity/SkyLight.h"
 #include "Components/TransformComponent.h"
 #include "Components/ModelComponent.h"
+#include "Core/Logger.h"
 
 namespace vk {
     MainWindow::MainWindow(int width, int height, const char *title) {
@@ -64,8 +65,6 @@ namespace vk {
                 mGraphics->Draw();
                 mGraphics->EndFrame();
             }
-
-//s
         }
         delete mGraphics;
     }
@@ -172,6 +171,6 @@ namespace vk {
         mDefaultScene->BeginPlay();
 
         testMap = skyLight->GetDirectionalLight()->GetShadowMap();
-
+        Logger::GetInstance()->WriteLog({LogType::WARN, "The Scene is now set and Render is starting"});
     }
 }

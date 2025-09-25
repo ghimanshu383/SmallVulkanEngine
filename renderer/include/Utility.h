@@ -105,7 +105,7 @@ namespace rn {
 
         static void CheckVulkanError(VkResult result, const char *message) {
             if (result != VK_SUCCESS) {
-                LOG_ERROR("VULKAN GRAPHICS ERROR : %s", message);
+                LOG_ERROR("VULKAN GRAPHICS ERROR : {}", message);
                 std::exit(EXIT_FAILURE);
             }
         }

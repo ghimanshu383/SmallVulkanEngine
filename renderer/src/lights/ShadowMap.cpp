@@ -69,10 +69,10 @@ namespace rn {
         std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertexShaderStage, fragShaderStage};
 
         // viewport / scissor (we'll still use them as dynamic)
-        mViewPort = {0.0f, 0.0f, static_cast<float>(mCtx->windowExtents.width),
-                     static_cast<float>(mCtx->windowExtents.height), 0.0f, 1.0f};
+        mViewPort = {0.0f, 0.0f, static_cast<float>(mCtx->viewportExtends.width),
+                     static_cast<float>(mCtx->viewportExtends.height), 0.0f, 1.0f};
         mScissors = {{0, 0},
-                     mCtx->windowExtents};
+                     mCtx->viewportExtends};
 
         VkPipelineViewportStateCreateInfo viewportStateCreateInfo{};
         viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -251,8 +251,8 @@ namespace rn {
 
     void ShadowMap::CreateFrameBuffers() {
         mSceneImage = Utility::CreateImage("Shadow Map Image", mCtx->physicalDevice, mCtx->logicalDevice,
-                                           mCtx->windowExtents.width,
-                                           mCtx->windowExtents.height,
+                                           mCtx->viewportExtends.width,
+                                           mCtx->viewportExtends.height,
                                            VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
                                            (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
                                            (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
@@ -263,8 +263,8 @@ namespace rn {
 
         VkFramebufferCreateInfo framebufferCreateInfo{};
         framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferCreateInfo.width = mCtx->windowExtents.width;
-        framebufferCreateInfo.height = mCtx->windowExtents.height;
+        framebufferCreateInfo.width = mCtx->viewportExtends.width;
+        framebufferCreateInfo.height = mCtx->viewportExtends.height;
         framebufferCreateInfo.renderPass = mShadowRenderPass;
         framebufferCreateInfo.layers = 1;
         framebufferCreateInfo.flags = 0;
@@ -280,8 +280,8 @@ namespace rn {
         mShadowDebugFrameBuffers.resize(mCtx->swapChainImageCount);
 
         mSceneImage = Utility::CreateImage("Shadow Map Image", mCtx->physicalDevice, mCtx->logicalDevice,
-                                           mCtx->windowExtents.width,
-                                           mCtx->windowExtents.height,
+                                           mCtx->viewportExtends.width,
+                                           mCtx->viewportExtends.height,
                                            VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
                                            (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
                                            (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
@@ -299,8 +299,8 @@ namespace rn {
             List<VkImageView> attachments{mSceneImageview, mCtx->swapChainImageViews->at(i)};
             VkFramebufferCreateInfo createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            createInfo.width = mCtx->windowExtents.width;
-            createInfo.height = mCtx->windowExtents.height;
+            createInfo.width = mCtx->viewportExtends.width;
+            createInfo.height = mCtx->viewportExtends.height;
             createInfo.renderPass = mShadowRenderPass;
             createInfo.attachmentCount = attachments.size();
             createInfo.pAttachments = attachments.data();
@@ -409,7 +409,7 @@ namespace rn {
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassBeginInfo.framebuffer = mShadowFrameBuffer;
         renderPassBeginInfo.renderArea = {{0, 0},
-                                          mCtx->windowExtents};
+                                          mCtx->viewportExtends};
         List<VkClearValue> clearValue{};
         clearValue.resize(1);
         clearValue[0].depthStencil.depth = 1;
@@ -423,14 +423,14 @@ namespace rn {
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = (float) mCtx->windowExtents.width;
-        viewport.height = (float) mCtx->windowExtents.height;
+        viewport.width = (float) mCtx->viewportExtends.width;
+        viewport.height = (float) mCtx->viewportExtends.height;
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = mCtx->windowExtents;
+        scissor.extent = mCtx->viewportExtends;
 
         vkCmdSetViewport(mShadowCommandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(mShadowCommandBuffer, 0, 1, &scissor);

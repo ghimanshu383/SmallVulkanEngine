@@ -27,6 +27,8 @@ add_executable(${ENGINE}
         src/Components/ModelComponent.cpp
         include/Core/ImguiEditor.h
         src/Core/ImguiEditor.cpp
+        include/Core/Logger.h
+        src/Core/Logger.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC

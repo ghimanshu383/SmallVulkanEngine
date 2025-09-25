@@ -16,6 +16,7 @@ namespace rn {
         static RendererContext mRendererContext;
         static BlockingQueue<RendererEvent> mEventQueue;
         static std::atomic<bool> mShouldRender;
+        std::mutex mMutex;
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -48,6 +49,7 @@ namespace rn {
         List<VkImage> mSwapChainImages{};
         List<VkImageView> mSwapChainImageViews{};
         VkExtent2D mWindowExtent{};
+        VkExtent2D mViewportExtent{};
         VkSurfaceFormatKHR mSurfaceFormat{};
         VkPresentModeKHR mPresentMode{};
         VkSwapchainKHR mSwapChain{};
@@ -61,7 +63,6 @@ namespace rn {
 #pragma endregion
 #pragma region Draw
         std::uint32_t mCurrentImageIndex;
-        List<VkImageView> mOffScreenImageViews{};
         VkCommandPool mCommandPool;
         VkCommandBuffer mCommandBuffer;
         VkSemaphore mGetImageSemaphore;
@@ -112,14 +113,18 @@ namespace rn {
 #pragma region OFF_SCREEN
         VkRenderPass mOffScreenRenderPass{};
         List<VkImage> mOffScreenImages{};
+        List<VkImageView> mOffScreenImageViews{};
         List<VkDeviceMemory> mOffScreenImageMemory{};
         List<VkFramebuffer> mOffScreenFrameBuffers{};
         List<VkFramebuffer> mFrameBuffers;
-
-        VkDescriptorSetLayout mOffScreenLayout{};
-        VkDescriptorPool mOffSetDescriptorPool{};
         VkSampler mOffScreenImageSampler{};
         List<VkDescriptorSet> mOffScreenDescriptorSets{};
+
+        // Mouse picking
+        List<VkImage> mMousePickingImages{};
+        List<VkImageView> mMousePickingImageViews{};
+        List<VkDeviceMemory> mMousePickingImageMemory{};
+
 #pragma endregion
     public:
         // Functions
@@ -149,7 +154,7 @@ namespace rn {
                         });
         }
 
-        static void StartRenderEventListener();
+        void StartRenderEventListener();
 
         static void AddRenderEvent(const RendererEvent &event) {
             mEventQueue.Push(event);
@@ -171,6 +176,7 @@ namespace rn {
             mRendererContext.swapChainImageViews = &mSwapChainImageViews;
             mRendererContext.swapchain = mSwapChain;
             mRendererContext.windowExtents = mWindowExtent;
+            mRendererContext.viewportExtends = mWindowExtent;
             mRendererContext.viewportExtends = mWindowExtent;
             mRendererContext.AddRendererEvent = &AddRenderEvent;
         }
@@ -326,6 +332,10 @@ namespace rn {
 #pragma region OFF_SCREEN
 
         void CreateOffScreenBindings();
+
+        void CreateOffScreenFrameBuffers();
+
+        void AllocateOffScreenDescriptorSets();
 
 #pragma endregion
 

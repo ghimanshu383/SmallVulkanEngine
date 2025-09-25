@@ -28,7 +28,7 @@ namespace vk {
     bool Camera::RegisterEvents() {
 
         mProjectionMatrix = glm::perspective(glm::radians(45.f),
-                                             (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
+                                             (float) mCtx->viewportExtends.width / (float) mCtx->viewportExtends.height,
                                              0.1f, 100.f);
         mProjectionMatrix[1][1] *= -1;
 

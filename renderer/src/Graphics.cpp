@@ -25,7 +25,10 @@ namespace rn {
     }
 
     void Graphics::StartRenderEventListener() {
-        std::thread mEventListenerThread([]() -> void {
+
+        std::thread mEventListenerThread([this]() -> void {
+            std::optional<RendererEvent> pendingResize;
+            std::chrono::steady_clock::time_point lastResizeTime;
             while (true) {
                 RendererEvent event = mEventQueue.Pop();
                 mShouldRender.store(false, std::memory_order_release);
@@ -35,8 +38,11 @@ namespace rn {
                         break;
                     }
                     case RendererEvent::Type::VIEW_PORT_RESIZE: {
-                        //mRendererContext.viewportExtends = {event.width, event.height};
-                        LOG_INFO("The Render For Resize View port was fired {}, {}", event.width, event.height);
+                        pendingResize = event;
+                        lastResizeTime = std::chrono::steady_clock::now();
+                        std::lock_guard<std::mutex> guard{mMutex};
+                        mRendererContext.viewportExtends = {pendingResize->width, pendingResize->height};
+                        this->ReCreateSwapChain();
                         break;
                     }
                 }
@@ -51,16 +57,17 @@ namespace rn {
         GetWindowSurface();
         PickPhysicalDeviceAndCreateLogicalDevice();
         CreateSwapChain();
+        mRendererContext.viewportExtends = mWindowExtent;
         CreateDepthBufferImages();
         CreateRenderPass();
         CreateOffScreenRenderPass();
         CreatePipeline();
         CreateSemaphoresAndFences();
-        CreateFrameBuffers();
         CreateCommandPool();
         AllocateCommandBuffer();
         SetRendererContext();
-        StartRenderEventListener();
+        CreateFrameBuffers();
+        CreateOffScreenFrameBuffers();
         Imgui_vulkan_init();
 
         // Setting up the view and projection matrix descriptor sets
@@ -69,8 +76,11 @@ namespace rn {
 
         CreateDescriptorPool();
         AllocateDescriptorSets();
+        AllocateOffScreenDescriptorSets();
         CreateOffScreenBindings();
         CreateDefaultTexture(R"(D:\cProjects\SmallVkEngine\textures\brick.png)");
+
+        StartRenderEventListener();
 
     }
 
@@ -494,6 +504,7 @@ namespace rn {
         CreateSwapChain();
         CreateDepthBufferImages();
         CreateFrameBuffers();
+        CreateOffScreenFrameBuffers();
         for (VkImage &offScreenImage: mOffScreenImages) {
             Utility::TransitionImageLayout(mRendererContext, offScreenImage, VK_IMAGE_LAYOUT_UNDEFINED,
                                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -594,6 +605,17 @@ namespace rn {
         colorImageAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorImageAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
 
+        VkAttachmentDescription mousePickingColorAttachmentDescription{};
+
+        mousePickingColorAttachmentDescription.format = mSurfaceFormat.format;
+        mousePickingColorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        mousePickingColorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        mousePickingColorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        mousePickingColorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        mousePickingColorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        mousePickingColorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        mousePickingColorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
         VkAttachmentDescription depthAttachmentDescription{};
         depthAttachmentDescription.format = mDepthBufferFormat;
         depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -610,8 +632,12 @@ namespace rn {
         colorAttachmentReference.attachment = 0;
         colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentReference mousePickingAttachmentRef{};
+        mousePickingAttachmentRef.attachment = 1;
+        mousePickingAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
         VkAttachmentReference depthAttachmentRef{};
-        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.attachment = 2;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
         VkSubpassDescription subpassDescriptionOne{};
@@ -620,7 +646,8 @@ namespace rn {
         subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
         subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
 
-        std::array<VkAttachmentDescription, 2> attachments{colorImageAttachmentDescription,
+        std::array<VkAttachmentDescription, 3> attachments{colorImageAttachmentDescription,
+                                                           mousePickingColorAttachmentDescription,
                                                            depthAttachmentDescription};
         std::array<VkSubpassDescription, 1> subPass{subpassDescriptionOne};
         VkRenderPassCreateInfo renderPassCreateInfo{};
@@ -845,6 +872,67 @@ namespace rn {
 
     }
 
+    void Graphics::CreateOffScreenFrameBuffers() {
+        mOffScreenFrameBuffers.resize(mSwapChainImageViews.size());
+
+        mOffScreenImageViews.resize(mSwapChainImageViews.size());
+        mOffScreenImages.resize(mSwapChainImageViews.size());
+        mOffScreenImageMemory.resize(mSwapChainImageViews.size());
+
+        mMousePickingImages.resize(mSwapChainImageViews.size());
+        mMousePickingImageViews.resize(mSwapChainImageViews.size());
+        mMousePickingImageMemory.resize(mSwapChainImageViews.size());
+
+
+        for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
+
+            // Creating the frame buffer for the off screen rendering for the imgui view port;
+            mOffScreenImages[i] = Utility::CreateImage("ImGui off-ScreenImage", mDevices.physicalDevice,
+                                                       mDevices.logicalDevice,
+                                                       mRendererContext.viewportExtends.width,
+                                                       mRendererContext.viewportExtends.height,
+                                                       mSurfaceFormat.format,
+                                                       VK_IMAGE_TILING_OPTIMAL,
+                                                       (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                                        VK_IMAGE_USAGE_SAMPLED_BIT),
+                                                       (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+                                                       mOffScreenImageMemory[i]);
+            Utility::CreateImageView(mDevices.logicalDevice, mOffScreenImages[i], mSurfaceFormat.format,
+                                     mOffScreenImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
+
+            mMousePickingImages[i] = Utility::CreateImage("Mouse Picking Image", mDevices.physicalDevice,
+                                                          mDevices.logicalDevice,
+                                                          mRendererContext.viewportExtends.width,
+                                                          mRendererContext.viewportExtends.height,
+                                                          mSurfaceFormat.format,
+                                                          VK_IMAGE_TILING_OPTIMAL,
+                                                          (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
+                                                          (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+                                                          mMousePickingImageMemory[i]);
+            Utility::CreateImageView(mDevices.logicalDevice, mMousePickingImages[i], mSurfaceFormat.format,
+                                     mMousePickingImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
+
+            std::array<VkImageView, 3>
+                    offScreenAttachments{mOffScreenImageViews[i], mMousePickingImageViews[i],
+                                         mDepthBufferImageViews[i]};
+
+            VkFramebufferCreateInfo offScreenCreateInfo{};
+            offScreenCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            offScreenCreateInfo.width = mRendererContext.viewportExtends.width;
+            offScreenCreateInfo.height = mRendererContext.viewportExtends.height;
+            offScreenCreateInfo.renderPass = mOffScreenRenderPass;
+            offScreenCreateInfo.attachmentCount = offScreenAttachments.size();
+            offScreenCreateInfo.pAttachments = offScreenAttachments.data();
+            offScreenCreateInfo.layers = 1;
+            offScreenCreateInfo.flags = 0;
+
+            Utility::CheckVulkanError(vkCreateFramebuffer(mDevices.logicalDevice, &offScreenCreateInfo, nullptr,
+                                                          &mOffScreenFrameBuffers[i]),
+                                      "Failed to create the frame buffers for the offscreen rendering");
+        }
+    }
+
     void Graphics::CreateFrameBuffers() {
         mFrameBuffers.resize(mSwapChainImageViews.size());
         mOffScreenFrameBuffers.resize(mSwapChainImageViews.size());
@@ -866,35 +954,6 @@ namespace rn {
             Utility::CheckVulkanError(
                     vkCreateFramebuffer(mDevices.logicalDevice, &framebufferCreateInfo, nullptr, &mFrameBuffers[i]),
                     "Failed to create the frame buffer for the image view");
-
-            // Creating the frame buffer for the off screen rendering for the imgui view port;
-            mOffScreenImages[i] = Utility::CreateImage("ImGui off-ScreenImage", mDevices.physicalDevice,
-                                                       mDevices.logicalDevice,
-                                                       mWindowExtent.width, mWindowExtent.height,
-                                                       mSurfaceFormat.format,
-                                                       VK_IMAGE_TILING_OPTIMAL,
-                                                       (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                                                        VK_IMAGE_USAGE_SAMPLED_BIT),
-                                                       (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-                                                       mOffScreenImageMemory[i]);
-            Utility::CreateImageView(mDevices.logicalDevice, mOffScreenImages[i], mSurfaceFormat.format,
-                                     mOffScreenImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
-
-            std::array<VkImageView, 2> offScreenAttachments{mOffScreenImageViews[i], mDepthBufferImageViews[i]};
-
-            VkFramebufferCreateInfo offScreenCreateInfo{};
-            offScreenCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            offScreenCreateInfo.width = mWindowExtent.width;
-            offScreenCreateInfo.height = mWindowExtent.height;
-            offScreenCreateInfo.renderPass = mOffScreenRenderPass;
-            offScreenCreateInfo.attachmentCount = offScreenAttachments.size();
-            offScreenCreateInfo.pAttachments = offScreenAttachments.data();
-            offScreenCreateInfo.layers = 1;
-            offScreenCreateInfo.flags = 0;
-
-            Utility::CheckVulkanError(vkCreateFramebuffer(mDevices.logicalDevice, &offScreenCreateInfo, nullptr,
-                                                          &mOffScreenFrameBuffers[i]),
-                                      "Failed to create the frame buffers for the offscreen rendering");
         }
 
     }
@@ -933,7 +992,7 @@ namespace rn {
         renderPassBeginInfo.renderPass = mOffScreenRenderPass;
         renderPassBeginInfo.framebuffer = mOffScreenFrameBuffers[currentImageIndex];
         renderPassBeginInfo.renderArea.offset = {0, 0};
-        renderPassBeginInfo.renderArea.extent = mWindowExtent;
+        renderPassBeginInfo.renderArea.extent = mRendererContext.viewportExtends;
 
         std::array<VkClearValue, 2> clearValues{};
         clearValues[0].color = {{.2f, .2f, .2f, 1.0}};
@@ -947,14 +1006,14 @@ namespace rn {
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = (float) mWindowExtent.width;
-        viewport.height = (float) mWindowExtent.height;
+        viewport.width = (float) mRendererContext.viewportExtends.width;
+        viewport.height = (float) mRendererContext.viewportExtends.height;
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = mWindowExtent;
+        scissor.extent = mRendererContext.viewportExtends;
 
         vkCmdSetViewport(mCommandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(mCommandBuffer, 0, 1, &scissor);
@@ -985,6 +1044,7 @@ namespace rn {
         if (!mShouldRender.load(std::memory_order_acquire)) {
             return false;
         }
+        mMutex.lock();
         vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
         VkResult result = vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore,
@@ -1101,6 +1161,7 @@ namespace rn {
             LOG_ERROR("Swapchain Present Error.. Render is Exiting");
             std::exit(EXIT_FAILURE);
         }
+        mMutex.unlock();
     }
 
     void Graphics::Imgui_vulkan_init() {
@@ -1444,8 +1505,8 @@ namespace rn {
             mDepthBufferFormat = ChooseSupportedFormats(requiredFormats, VK_IMAGE_TILING_OPTIMAL,
                                                         VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
             mDepthBufferImages[i] = Utility::CreateImage("Depth BufferImage", mDevices.physicalDevice,
-                                                         mDevices.logicalDevice, mWindowExtent.width,
-                                                         mWindowExtent.height, mDepthBufferFormat,
+                                                         mDevices.logicalDevice, mRendererContext.viewportExtends.width,
+                                                         mRendererContext.viewportExtends.height, mDepthBufferFormat,
                                                          VK_IMAGE_TILING_OPTIMAL,
                                                          (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT),
                                                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -1530,6 +1591,7 @@ namespace rn {
     }
 
     void Graphics::CreateOffScreenBindings() {
+
         VkSamplerCreateInfo sampInfo{};
         sampInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         sampInfo.magFilter = VK_FILTER_LINEAR;
@@ -1545,17 +1607,6 @@ namespace rn {
         sampInfo.minLod = 0.0f;
         sampInfo.maxLod = 1.0f;
 
-        List<VkDescriptorSetLayout> layouts(mOffScreenImageViews.size(),
-                                            ImGui_ImplVulkan_GetDescriptorSetLayout());
-
-        mOffScreenDescriptorSets.resize(mOffScreenImageViews.size());
-        VkDescriptorSetAllocateInfo allocateInfo{};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocateInfo.descriptorPool = mImguiDescriptorPool;
-        allocateInfo.descriptorSetCount = mOffScreenImageViews.size();
-        allocateInfo.pSetLayouts = layouts.data();
-
-        vkAllocateDescriptorSets(mDevices.logicalDevice, &allocateInfo, mOffScreenDescriptorSets.data());
 
         vkCreateSampler(mDevices.logicalDevice, &sampInfo, nullptr, &mOffScreenImageSampler);
 
@@ -1577,6 +1628,29 @@ namespace rn {
 
             vkUpdateDescriptorSets(mDevices.logicalDevice, 1, &writeImage, 0, nullptr);
         }
+
+    }
+
+    void Graphics::AllocateOffScreenDescriptorSets() {
+        List<VkDescriptorSetLayout> layouts(mOffScreenImageViews.size(),
+                                            ImGui_ImplVulkan_GetDescriptorSetLayout());
+
+        mOffScreenDescriptorSets.clear();
+        mOffScreenDescriptorSets.resize(mOffScreenImageViews.size());
+        VkDescriptorSetAllocateInfo allocateInfo{};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocateInfo.descriptorPool = mImguiDescriptorPool;
+        allocateInfo.descriptorSetCount = mOffScreenImageViews.size();
+        allocateInfo.pSetLayouts = layouts.data();
+
+        if (mOffScreenDescriptorSets[0] != VK_NULL_HANDLE) {
+            vkFreeDescriptorSets(mDevices.logicalDevice, mImguiDescriptorPool, mOffScreenDescriptorSets.size(),
+                                 mOffScreenDescriptorSets.data());
+        }
+
+        Utility::CheckVulkanError(
+                vkAllocateDescriptorSets(mDevices.logicalDevice, &allocateInfo, mOffScreenDescriptorSets.data()),
+                "The Allocation for the imgui descriptors failed");
         mRendererContext.imguiViewPortDescriptors = &mOffScreenDescriptorSets;
     }
 

@@ -5,6 +5,7 @@
 #include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "Core/ImguiEditor.h"
+#include "Core/Logger.h"
 
 namespace vk {
     ImguiEditor *ImguiEditor::instance = nullptr;
@@ -26,9 +27,8 @@ namespace vk {
 
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-        ImGui::Begin("Console");
-        ImGui::Text("This is a test window");
-        ImGui::End();
+
+        Logger::GetInstance()->SetUpLogConsole();
 
         ImGui::Begin("Viewport");
 

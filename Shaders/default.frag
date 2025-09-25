@@ -8,6 +8,7 @@ layout (location = 5) in vec3 vPos;
 
 
 layout (location = 0) out vec4 color;
+layout (location = 1) out uint id;
 
 layout (set = 1, binding = 0) uniform sampler2D defaultSampler;
 
@@ -43,4 +44,5 @@ vec4 CalculatePongLights() {
 }
 void main() {
     color = texture(defaultSampler, textureCoords) * CalculatePongLights();
+    id = 1;
 }

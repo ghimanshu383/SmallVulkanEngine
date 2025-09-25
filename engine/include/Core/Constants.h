@@ -17,6 +17,7 @@ namespace vk {
     public:
         static std::uint32_t WINDOW_WIDTH;
         static std::uint32_t WINDOW_HEIGHT;
+        static std::uint32_t MAX_LOGS;
 
         static void ParseObjectString(std::string &string, List<std::string> &substring, char token);
     };
