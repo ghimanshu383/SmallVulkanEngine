@@ -6,6 +6,7 @@
 #define SMALLVKENGINE_IMGUIEDITOR_H
 
 #include "Utility.h"
+#include "Core/Delegate.h"
 
 namespace vk {
     class ImguiEditor {
@@ -15,10 +16,24 @@ namespace vk {
         ImguiEditor() = default;
 
         static ImguiEditor *instance;
+        static Delegate<> *mGuiDelegate;
+        ImVec2 localMousePos{};
+        bool IsMouseLeftDown{};
+
     public:
         static ImguiEditor *GetInstance(rn::RendererContext *ctx);
 
         void RenderGui();
+
+        Delegate<> *GetGuiDelegate() const { return mGuiDelegate; };
+
+        ImVec2 GetLocalMousePos() {
+            return localMousePos;
+        }
+
+        bool GetIsMouseLeftDown() const {
+            return ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        }
     };
 }
 #endif //SMALLVKENGINE_IMGUIEDITOR_H

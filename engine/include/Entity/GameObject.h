@@ -17,8 +17,9 @@ namespace vk {
         List<std::shared_ptr<Component>> mComponentList;
         bool IsPendingDestroy;
         Scene *mScene;
+        std::uint32_t mPickId;
     public:
-        explicit GameObject(Scene *scene);
+        explicit GameObject(Scene *scene, std::uint32_t pickId);
 
         virtual void BeginPlay();
 
@@ -50,6 +51,8 @@ namespace vk {
         void Destroy() { IsPendingDestroy = true; }
 
         bool GetIsPendingDestroy() const { return IsPendingDestroy; }
+
+        std::uint32_t GetPickId() const { return mPickId; }
     };
 }
 #endif //SMALLVKENGINE_GAMEOBJECT_H

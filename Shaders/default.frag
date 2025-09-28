@@ -5,7 +5,7 @@ layout (location = 1) in vec2 textureCoords;
 layout (location = 2) in vec3 vNormals;
 layout (location = 4) in vec3 vWorldPos;
 layout (location = 5) in vec3 vPos;
-
+layout (location = 6) flat in uint vPickId;
 
 layout (location = 0) out vec4 color;
 layout (location = 1) out uint id;
@@ -44,5 +44,5 @@ vec4 CalculatePongLights() {
 }
 void main() {
     color = texture(defaultSampler, textureCoords) * CalculatePongLights();
-    id = 1;
+    id = vPickId;
 }

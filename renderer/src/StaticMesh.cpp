@@ -6,8 +6,9 @@
 
 namespace rn {
     StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices,
+                           std::uint32_t pickId,
                            std::string &textureId, bool calculateNormals)
-            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mTextureId{textureId},
+            : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mPickId{pickId}, mTextureId{textureId},
               mCalculateNormals{calculateNormals} {
         mIndicesCount = indices.size();
         Init();

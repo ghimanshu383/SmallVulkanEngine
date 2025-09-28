@@ -12,6 +12,7 @@ layout (location = 2) in vec2 uv;
 layout (location = 3) in vec3 normals;
 layout (location = 4) out vec3 vWorldPos;
 layout (location = 5) out vec3 vPos;
+layout (location = 6) flat out uint vPickId;
 
 layout (set = 0, binding = 0) uniform ViewProjection {
     mat4 projection;
@@ -20,6 +21,7 @@ layout (set = 0, binding = 0) uniform ViewProjection {
 
 layout (set = 0, binding = 1) uniform ModelUBO {
     mat4 model;
+    uint pickId;
 } model;
 
 layout (location = 0) out vec4 vColor;
@@ -40,4 +42,5 @@ void main() {
 
     vNormals = mat3(transpose(inverse(modelPush.model))) * normals;
     vPos = pos;
+    vPickId = model.pickId;
 }

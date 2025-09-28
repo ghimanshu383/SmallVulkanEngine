@@ -23,12 +23,15 @@ namespace vk {
 
         template<typename T, typename... Args, typename = typename std::enable_if<std::is_base_of<GameObject, T>::value>::type>
         std::shared_ptr<T> SpawnGameObject(Args... args) {
-            std::shared_ptr<T> gameObject = std::make_shared<T>(this, args...);
+            std::shared_ptr<T> gameObject = std::make_shared<T>(this, mGameObjects.size() + 1, args...);
             mGameObjects.push_back(gameObject);
             return gameObject;
         }
 
         rn::RendererContext *GetRendererContext() const { return mCtx; }
+
+        std::uint32_t GetGameObjectListSize() const { return mGameObjects.size(); };
+
     };
 }
 #endif //SMALLVKENGINE_SCENE_H

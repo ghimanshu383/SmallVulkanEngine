@@ -29,6 +29,7 @@ add_executable(${ENGINE}
         src/Core/ImguiEditor.cpp
         include/Core/Logger.h
         src/Core/Logger.cpp
+        include/Core/GizmoController.h
 )
 
 target_include_directories(${ENGINE} PUBLIC

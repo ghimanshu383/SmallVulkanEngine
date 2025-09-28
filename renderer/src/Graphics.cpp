@@ -9,6 +9,7 @@
 #include "imgui/imgui_impl_vulkan.h"
 #include "lights/OmniDirectionalLight.h"
 #include "lights/ShadowMap.h"
+#include "Gizmos.h"
 
 
 namespace rn {
@@ -19,6 +20,11 @@ namespace rn {
     OmniDirectionalLight *Graphics::mDirectionalLight = nullptr;
     std::atomic<bool> Graphics::mShouldRender = {true};
     BlockingQueue<RendererEvent> Graphics::mEventQueue = {};
+    std::uint32_t Graphics::mMouseYPos = 0;
+    std::uint32_t Graphics::mMouseXPos = 0;
+    std::uint32_t Graphics::mActiveClickObject = 0;
+    bool Graphics::isViewPortClicked = false;
+    AXIS Graphics::activeGizmoAxis = AXIS::NONE;
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -34,7 +40,7 @@ namespace rn {
                 mShouldRender.store(false, std::memory_order_release);
                 switch (event.type) {
                     case RendererEvent::Type::WINDOW_RESIZE : {
-                        //mRendererContext.windowExtents = {event.width, event.height};
+                        this->ReCreateSwapChain();
                         break;
                     }
                     case RendererEvent::Type::VIEW_PORT_RESIZE: {
@@ -44,6 +50,11 @@ namespace rn {
                         mRendererContext.viewportExtends = {pendingResize->width, pendingResize->height};
                         this->ReCreateSwapChain();
                         break;
+                    }
+                    case RendererEvent::Type::VIEW_PORT_CLICKED : {
+                        mMouseXPos = event.clickX;
+                        mMouseYPos = event.clickY;
+                        isViewPortClicked = true;
                     }
                 }
                 mShouldRender.store(true, std::memory_order_release);
@@ -73,6 +84,7 @@ namespace rn {
         // Setting up the view and projection matrix descriptor sets
         AllocateDynamicBufferTransferSpace();
         CreateUniformBuffers();
+        CreateMousePickingBuffers();
 
         CreateDescriptorPool();
         AllocateDescriptorSets();
@@ -81,6 +93,7 @@ namespace rn {
         CreateDefaultTexture(R"(D:\cProjects\SmallVkEngine\textures\brick.png)");
 
         StartRenderEventListener();
+        mGizmos = new Gizmos(&mRendererContext);
 
     }
 
@@ -93,6 +106,9 @@ namespace rn {
             vkDestroyBuffer(mDevices.logicalDevice, mDynamicBuffers[i], nullptr);
             vkFreeMemory(mDevices.logicalDevice, mDynamicBufferMemory[i], nullptr);
         }
+        vkDestroyBuffer(mDevices.logicalDevice, mMousePickingBuffer, nullptr);
+        vkFreeMemory(mDevices.logicalDevice, mMousePickingBufferMemory, nullptr);
+
         _aligned_free(mModelTransferSpace);
         auto textureIter = mTextureMap.begin();
         while (textureIter != mTextureMap.end()) {
@@ -125,6 +141,7 @@ namespace rn {
             delete mesh;
             iter++;
         }
+        delete mGizmos;
         vkDestroyCommandPool(mDevices.logicalDevice, mCommandPool, nullptr);
         for (VkFramebuffer framebuffer: mFrameBuffers) {
             vkDestroyFramebuffer(mDevices.logicalDevice, framebuffer, nullptr);
@@ -141,12 +158,16 @@ namespace rn {
             vkDestroyImageView(mDevices.logicalDevice, mSwapChainImageViews[i], nullptr);
             vkDestroyImageView(mDevices.logicalDevice, mOffScreenImageViews[i], nullptr);
             vkDestroyImageView(mDevices.logicalDevice, mDepthBufferImageViews[i], nullptr);
+            vkDestroyImageView(mDevices.logicalDevice, mMousePickingImageViews[i], nullptr);
 
             vkDestroyImage(mDevices.logicalDevice, mDepthBufferImages[i], nullptr);
             vkFreeMemory(mDevices.logicalDevice, mDepthBufferImageMemory[i], nullptr);
 
             vkDestroyImage(mDevices.logicalDevice, mOffScreenImages[i], nullptr);
             vkFreeMemory(mDevices.logicalDevice, mOffScreenImageMemory[i], nullptr);
+
+            vkDestroyImage(mDevices.logicalDevice, mMousePickingImages[i], nullptr);
+            vkFreeMemory(mDevices.logicalDevice, mMousePickingImageMemory[i], nullptr);
         }
         vkDestroyPipeline(mDevices.logicalDevice, mPipeline, nullptr);
         vkDestroyPipelineLayout(mDevices.logicalDevice, mPipelineLayout, nullptr);
@@ -336,6 +357,8 @@ namespace rn {
         // Enabling required features for the physical device on to the logical device
         VkPhysicalDeviceFeatures deviceFeatures{};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
+        deviceFeatures.independentBlend = VK_TRUE;
+        deviceFeatures.wideLines = VK_TRUE;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
         Utility::CheckVulkanError(
@@ -490,16 +513,26 @@ namespace rn {
             vkDestroyImageView(mRendererContext.logicalDevice, mOffScreenImageViews[i], nullptr);
             vkDestroyImage(mRendererContext.logicalDevice, mOffScreenImages[i], nullptr);
             vkFreeMemory(mRendererContext.logicalDevice, mOffScreenImageMemory[i], nullptr);
+
+            vkDestroyImageView(mRendererContext.logicalDevice, mMousePickingImageViews[i], nullptr);
+            vkDestroyImage(mRendererContext.logicalDevice, mMousePickingImages[i], nullptr);
+            vkFreeMemory(mRendererContext.logicalDevice, mMousePickingImageMemory[i], nullptr);
         }
+        vkDestroyBuffer(mDevices.logicalDevice, mMousePickingBuffer, nullptr);
+        vkFreeMemory(mDevices.logicalDevice, mMousePickingBufferMemory, nullptr);
         vkDestroySwapchainKHR(mRendererContext.logicalDevice, mSwapChain, nullptr);
 
+        mSwapChainImages.clear();
         mSwapChainImageViews.clear();
         mFrameBuffers.clear();
         mOffScreenFrameBuffers.clear();
+
         mOffScreenImageViews.clear();
         mOffScreenImages.clear();
-        mSwapChainImageViews.clear();
-        mSwapChainImages.clear();
+
+        mMousePickingImageViews.clear();
+        mMousePickingImages.clear();
+
 
         CreateSwapChain();
         CreateDepthBufferImages();
@@ -511,6 +544,7 @@ namespace rn {
         }
         vkDestroySampler(mDevices.logicalDevice, mOffScreenImageSampler, nullptr);
         CreateOffScreenBindings();
+        CreateMousePickingBuffers();
 //        mViewport = {(float) mWindowExtent.width, (float) mWindowExtent.height};
 //        mScissors = {0, 0, mWindowExtent};
         if (mDirectionalLight != nullptr) {
@@ -607,9 +641,9 @@ namespace rn {
 
         VkAttachmentDescription mousePickingColorAttachmentDescription{};
 
-        mousePickingColorAttachmentDescription.format = mSurfaceFormat.format;
+        mousePickingColorAttachmentDescription.format = VK_FORMAT_R32_UINT;
         mousePickingColorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        mousePickingColorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        mousePickingColorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         mousePickingColorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         mousePickingColorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         mousePickingColorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -640,10 +674,11 @@ namespace rn {
         depthAttachmentRef.attachment = 2;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+        List<VkAttachmentReference> colorRef{colorAttachmentReference, mousePickingAttachmentRef};
         VkSubpassDescription subpassDescriptionOne{};
         subpassDescriptionOne.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpassDescriptionOne.colorAttachmentCount = 1;
-        subpassDescriptionOne.pColorAttachments = &colorAttachmentReference;
+        subpassDescriptionOne.colorAttachmentCount = colorRef.size();
+        subpassDescriptionOne.pColorAttachments = colorRef.data();
         subpassDescriptionOne.pDepthStencilAttachment = &depthAttachmentRef;
 
         std::array<VkAttachmentDescription, 3> attachments{colorImageAttachmentDescription,
@@ -673,6 +708,7 @@ namespace rn {
         Utility::CheckVulkanError(
                 vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mOffScreenRenderPass),
                 "Failed to create the Render Pass");
+        mRendererContext.offScreenRenderPass = mOffScreenRenderPass;
     }
 
     void Graphics::CreatePipeline() {
@@ -787,21 +823,24 @@ namespace rn {
         pipelineMultisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
         pipelineMultisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        VkPipelineColorBlendAttachmentState colorBlendAttachmentState{};
-        colorBlendAttachmentState.colorWriteMask =
-                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
-                | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachmentState.blendEnable = VK_FALSE;
+        VkPipelineColorBlendAttachmentState blendStates[2]{};
+
+        blendStates[0].blendEnable = VK_FALSE;
+        blendStates[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+        blendStates[1].blendEnable = VK_FALSE;
+        blendStates[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
 
         VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{};
         colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
-        colorBlendStateCreateInfo.attachmentCount = 1;
-        colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
+        colorBlendStateCreateInfo.attachmentCount = 2;
+        colorBlendStateCreateInfo.pAttachments = blendStates;
 
         CreateDescriptorLayouts();
         CreateTextureDefaultSampler();
-
+        mRendererContext.viewProjectionLayout = mViewProjectionDescriptorSetLayout;
         List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout,
                                                mLightsDescriptorSetLayout, mShadowLayout};
 
@@ -904,13 +943,13 @@ namespace rn {
                                                           mDevices.logicalDevice,
                                                           mRendererContext.viewportExtends.width,
                                                           mRendererContext.viewportExtends.height,
-                                                          mSurfaceFormat.format,
+                                                          VK_FORMAT_R32_UINT,
                                                           VK_IMAGE_TILING_OPTIMAL,
                                                           (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
                                                           (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
                                                           mMousePickingImageMemory[i]);
-            Utility::CreateImageView(mDevices.logicalDevice, mMousePickingImages[i], mSurfaceFormat.format,
+            Utility::CreateImageView(mDevices.logicalDevice, mMousePickingImages[i], VK_FORMAT_R32_UINT,
                                      mMousePickingImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT);
 
             std::array<VkImageView, 3>
@@ -979,6 +1018,7 @@ namespace rn {
 
         Utility::CheckVulkanError(vkAllocateCommandBuffers(mDevices.logicalDevice, &allocateInfo, &mCommandBuffer),
                                   "Failed to allocate the command buffer");
+        mRendererContext.mainCommandBuffer = mCommandBuffer;
     }
 
     void Graphics::BeginOffScreenPass(std::uint32_t currentImageIndex) {
@@ -994,9 +1034,10 @@ namespace rn {
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = mRendererContext.viewportExtends;
 
-        std::array<VkClearValue, 2> clearValues{};
+        std::array<VkClearValue, 3> clearValues{};
         clearValues[0].color = {{.2f, .2f, .2f, 1.0}};
-        clearValues[1].depthStencil.depth = 1;
+        clearValues[1].color = {{0, 0, 0, 0}};
+        clearValues[2].depthStencil.depth = 1;
         renderPassBeginInfo.clearValueCount = clearValues.size();
         renderPassBeginInfo.pClearValues = clearValues.data();
 
@@ -1022,6 +1063,7 @@ namespace rn {
 
     void Graphics::EndOffScreenPass() {
         vkCmdEndRenderPass(mCommandBuffer);
+        CopyMouseImageToBuffer();
     }
 
     void Graphics::BeginSwapchainPass(std::uint32_t currentImageIndex) {
@@ -1047,6 +1089,7 @@ namespace rn {
         mMutex.lock();
         vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
+        SetActiveClickObject();
         VkResult result = vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore,
                                                 nullptr,
                                                 &mCurrentImageIndex);
@@ -1083,7 +1126,8 @@ namespace rn {
             vkCmdBindVertexBuffers(mCommandBuffer, 0, 1, &vertexBuffer, &offset);
             vkCmdBindIndexBuffer(mCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
             // Binding the descriptor sets
-            UpdateMvpUniformBuffers(mCurrentImageIndex, currentIndex, iter->second->GetModelMatrix());
+            UpdateMvpUniformBuffers(mCurrentImageIndex, currentIndex, iter->second->GetModelMatrix(),
+                                    iter->second->GetPickId());
 
             if (mDirectionalLight != nullptr) {
                 mDirectionalLight->UpdateLightDescriptorSet(mCurrentImageIndex);
@@ -1115,7 +1159,19 @@ namespace rn {
             vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
             iter++;
         }
-
+        // Drawing the active game object gizmo
+        Map<std::string, StaticMesh *, std::hash<std::string>>::iterator activeIter = std::find_if(
+                meshObjectList.begin(), meshObjectList.end(),
+                [&](const std::pair<std::string, StaticMesh *> &pair) -> bool {
+                    return pair.second->GetPickId() == mRendererContext.GetActiveClickedObjectId();
+                });
+        if (activeIter != meshObjectList.end()) {
+            glm::mat4 activeObjectModelMatrix = activeIter->second->GetModelMatrix();
+            glm::vec3 translation = activeObjectModelMatrix[3];
+            glm::mat4 gizmoModelMatrix = glm::translate(glm::mat4{1}, translation);
+            mGizmos->SetModelMatrix(gizmoModelMatrix);
+            mGizmos->DrawGizmos(mCurrentImageIndex);
+        }
     }
 
     void Graphics::EndFrame() {
@@ -1156,7 +1212,7 @@ namespace rn {
 
         VkResult presentResult = vkQueuePresentKHR(mPresentationQueue, &presentInfo);
         if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
-            ReCreateSwapChain();
+            mRendererContext.AddRendererEvent({RendererEvent::Type::WINDOW_RESIZE});
         } else if (presentResult != VK_SUCCESS) {
             LOG_ERROR("Swapchain Present Error.. Render is Exiting");
             std::exit(EXIT_FAILURE);
@@ -1388,6 +1444,7 @@ namespace rn {
         Utility::CheckVulkanError(vkAllocateDescriptorSets(mDevices.logicalDevice, &mvpDescriptorSetAllocateInfo,
                                                            mViewProjectionDescriptorSets.data()),
                                   "Failed to allocate the descriptor set for the view and projection matrix");
+        mRendererContext.viewProjectionDescriptorSet = mViewProjectionDescriptorSets.data();
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
             VkDescriptorBufferInfo viewProjectionBufferInfo{};
             viewProjectionBufferInfo.buffer = mViewProjectionBuffers[i];
@@ -1461,7 +1518,8 @@ namespace rn {
 
 
     void
-    Graphics::UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model) {
+    Graphics::UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model,
+                                      std::uint32_t pickId) {
         void *data;
         // Updating the view and model matrix;
         vkMapMemory(mDevices.logicalDevice, mViewProjectionMemory[currentImageIndex], 0, sizeof(ViewProjection), 0,
@@ -1474,6 +1532,7 @@ namespace rn {
         ModelUBO *pModel = (ModelUBO *) (
                 (std::uint64_t) mModelTransferSpace + currentObjectIndex * mModelMinAlignment);
         pModel->model = model;
+        pModel->pickId = pickId;
         vkMapMemory(mDevices.logicalDevice, mDynamicBufferMemory[currentImageIndex],
                     currentObjectIndex * mModelMinAlignment, sizeof(ModelUBO), 0, &data);
         memcpy(data, pModel, sizeof(ModelUBO));
@@ -1652,6 +1711,50 @@ namespace rn {
                 vkAllocateDescriptorSets(mDevices.logicalDevice, &allocateInfo, mOffScreenDescriptorSets.data()),
                 "The Allocation for the imgui descriptors failed");
         mRendererContext.imguiViewPortDescriptors = &mOffScreenDescriptorSets;
+    }
+
+    void Graphics::CreateMousePickingBuffers() {
+
+        Utility::CreateBuffer(mRendererContext, mMousePickingBuffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                              mMousePickingBufferMemory,
+                              (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+                              sizeof(uint32_t), "Mouse Picking Buffer");
+    }
+
+    void Graphics::CopyMouseImageToBuffer() {
+        if (isViewPortClicked && mViewport.width >= (float) mMouseXPos > 0 &&
+            mViewport.height >= (float) mMouseYPos > 0) {
+
+            VkBufferImageCopy region{};
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = 0;
+            region.imageSubresource.layerCount = 1;
+            region.imageOffset = {static_cast<int32_t>(mMouseXPos), static_cast<int32_t>(mMouseYPos), 0};
+            region.imageExtent = {1, 1, 1};
+
+            vkCmdCopyImageToBuffer(mCommandBuffer, mMousePickingImages[mCurrentImageIndex],
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mMousePickingBuffer, 1, &region);
+        }
+        isViewPortClicked = false;
+    }
+
+    std::uint32_t Graphics::GetLastClickedActiveObjectId() {
+        return mActiveClickObject;
+    }
+
+    void Graphics::SetActiveClickObject() {
+        uint32_t *data;
+        vkMapMemory(mDevices.logicalDevice, mMousePickingBufferMemory, 0, sizeof(uint32_t), 0, (void **) &data);
+        activeGizmoAxis = AXIS::NONE;
+        if (*data > 1000) {
+            uint32_t id = *data % 1000;
+            activeGizmoAxis = static_cast<AXIS>(id);
+            vkUnmapMemory(mDevices.logicalDevice, mMousePickingBufferMemory);
+            return;
+        }
+        mActiveClickObject = *data;
+        vkUnmapMemory(mDevices.logicalDevice, mMousePickingBufferMemory);
     }
 
 #pragma endregion

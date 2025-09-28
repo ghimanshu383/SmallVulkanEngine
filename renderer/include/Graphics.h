@@ -17,6 +17,11 @@ namespace rn {
         static BlockingQueue<RendererEvent> mEventQueue;
         static std::atomic<bool> mShouldRender;
         std::mutex mMutex;
+
+        class Gizmos *mGizmos;
+
+        static AXIS activeGizmoAxis;
+
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -121,10 +126,16 @@ namespace rn {
         List<VkDescriptorSet> mOffScreenDescriptorSets{};
 
         // Mouse picking
+        static std::uint32_t mMouseXPos;
+        static std::uint32_t mMouseYPos;
+        static std::uint32_t mActiveClickObject;
+        static bool isViewPortClicked;
+
         List<VkImage> mMousePickingImages{};
         List<VkImageView> mMousePickingImageViews{};
         List<VkDeviceMemory> mMousePickingImageMemory{};
-
+        VkBuffer mMousePickingBuffer{};
+        VkDeviceMemory mMousePickingBufferMemory{};
 #pragma endregion
     public:
         // Functions
@@ -179,6 +190,9 @@ namespace rn {
             mRendererContext.viewportExtends = mWindowExtent;
             mRendererContext.viewportExtends = mWindowExtent;
             mRendererContext.AddRendererEvent = &AddRenderEvent;
+            mRendererContext.GetActiveClickedObjectId = &GetLastClickedActiveObjectId;
+            mRendererContext.GetViewProjectionMatrix = &GetViewProjection;
+            mRendererContext.GetActiveGizmoAxis = &GetActiveGizmoAxis;
         }
 
         static void RegisterMeshObject(std::string &id, class StaticMesh *meshObject) {
@@ -190,6 +204,14 @@ namespace rn {
         void OnViewPortChange(uint32_t newWidth, uint32_t newHeight);
 
         static Map<std::string, class StaticMesh *, std::hash<std::string>> *GetSceneObjectMap();
+
+        static ViewProjection *GetViewProjection() {
+            return &mViewProjection;
+        }
+
+        static AXIS GetActiveGizmoAxis() {
+            return activeGizmoAxis;
+        }
 
 #pragma endregion
 #pragma region Instance_and_Validations
@@ -304,7 +326,8 @@ namespace rn {
 
         void CreateUniformBuffers();
 
-        void UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model);
+        void UpdateMvpUniformBuffers(size_t currentImageIndex, std::uint32_t currentObjectIndex, glm::mat4 model,
+                                     std::uint32_t pickId);
 
         void AllocateDynamicBufferTransferSpace();
 
@@ -336,6 +359,14 @@ namespace rn {
         void CreateOffScreenFrameBuffers();
 
         void AllocateOffScreenDescriptorSets();
+
+        void CreateMousePickingBuffers();
+
+        void CopyMouseImageToBuffer();
+
+        static std::uint32_t GetLastClickedActiveObjectId();
+
+        void SetActiveClickObject();
 
 #pragma endregion
 

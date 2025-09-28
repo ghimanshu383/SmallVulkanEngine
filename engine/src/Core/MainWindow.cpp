@@ -36,9 +36,23 @@ namespace vk {
             std::exit(EXIT_FAILURE);
         }
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-        mWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
+        GLFWmonitor *primaryMonitor = glfwGetPrimaryMonitor();
+        if (!primaryMonitor) {
+            // Handle monitor retrieval failure
+            glfwTerminate();
+            std::exit(EXIT_FAILURE);
+        }
+
+        const GLFWvidmode *mode = glfwGetVideoMode(primaryMonitor);
+        if (!mode) {
+            // Handle video mode retrieval failure
+            glfwTerminate();
+            std::exit(EXIT_FAILURE);
+        }
+
+        mWindow = glfwCreateWindow(mode->width, mode->height, title, nullptr, nullptr);
         if (!mWindow) {
             LOG_ERROR("Failed to create the glfw window");
             glfwTerminate();
@@ -57,14 +71,15 @@ namespace vk {
         while (!glfwWindowShouldClose(mWindow)) {
             glfwPollEvents();
             mRenderLoopDelegate->Invoke();
-            // Implement the delta Time functionality later;
-            mDefaultScene->Tick(1.f);
+
             // Rendering the Imgui Editor;
             ImguiEditor::GetInstance(mCtx)->RenderGui();
             if (mGraphics->BeginFrame()) {
                 mGraphics->Draw();
                 mGraphics->EndFrame();
             }
+            // Implement the delta Time functionality later;
+            mDefaultScene->Tick(1.f);
         }
         delete mGraphics;
     }
@@ -163,7 +178,7 @@ namespace vk {
                                                                                       skyLightInfo);
 
         skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
-        //  skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", cubeVertices, cubeIndices, "", true);
+        skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", cubeVertices, cubeIndices, "", true);
         std::shared_ptr<TransformComponent> transformComponent = skyLight->SpawnComponent<TransformComponent>(
                 "Sky Light transform Component");
         transformComponent->setTranslate(skyLight->GetLightInfo().position);

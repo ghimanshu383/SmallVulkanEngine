@@ -46,6 +46,8 @@ namespace vk {
 
         const glm::mat4 &GetProjectionMatrix();
 
+        const glm::vec3 &GetCameraFront() const { return mFront; };
+
     };
 }
 #endif //SMALLVKENGINE_CAMERA_H

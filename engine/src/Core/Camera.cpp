@@ -35,6 +35,7 @@ namespace vk {
         KeyEventListener(InputSystem::GetInstance()->GetKeys());
 
         mMainWindow->GetRendererContext()->UpdateViewAndProjectionMatrix({mProjectionMatrix, mViewMatrix});
+        mMainWindow->GetRendererContext()->cameraForward = mFront;
         return true;
     }
 

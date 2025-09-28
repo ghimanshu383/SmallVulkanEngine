@@ -21,5 +21,6 @@ namespace vk {
 
         static void ParseObjectString(std::string &string, List<std::string> &substring, char token);
     };
+
 }
 #endif //SMALLVKENGINE_CONSTANTS_H

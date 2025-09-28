@@ -9,6 +9,7 @@
 
 #include "stb_image.h"
 #include "precomp.h"
+#include "imgui/imgui.h"
 
 namespace rn {
 #define LOG_INFO(M, ...) spdlog::info(M, ##__VA_ARGS__)
@@ -18,6 +19,12 @@ namespace rn {
     using List = std::vector<T>;
     template<typename T, typename R, typename S>
     using Map = std::unordered_map<T, R, S>;
+    enum class AXIS {
+        NONE = 0,
+        X = 1,
+        Y = 2,
+        Z = 3
+    };
     struct Vertex {
         glm::vec3 pos;
         glm::vec4 color;
@@ -30,8 +37,12 @@ namespace rn {
     };
     struct ModelUBO {
         glm::mat4 model;
+        std::uint32_t pickId;
     };
 
+    struct ActiveGizmoAxis {
+        std::uint32_t activeAxis;
+    };
     struct alignas(16) OmniDirectionalInfo {
         glm::mat4 projection;
         glm::mat4 view;
@@ -43,11 +54,14 @@ namespace rn {
     struct RendererEvent {
         enum class Type {
             WINDOW_RESIZE,
-            VIEW_PORT_RESIZE
+            VIEW_PORT_RESIZE,
+            VIEW_PORT_CLICKED,
         };
         Type type;
         uint32_t width;
         uint32_t height;
+        uint32_t clickX;
+        uint32_t clickY;
     };
 
     struct RendererContext {
@@ -55,11 +69,15 @@ namespace rn {
         VkPhysicalDevice physicalDevice;
         VkDevice logicalDevice;
         VkCommandPool commandPool;
+        VkCommandBuffer mainCommandBuffer;
         VkQueue graphicsQueue;
         VkQueue presentationQueue;
+        VkRenderPass offScreenRenderPass;
         VkDescriptorPool samplerDescriptorPool;
         VkDescriptorSetLayout samplerDescriptorSetLayout;
+        VkDescriptorSet *viewProjectionDescriptorSet;
         VkSampler textureSampler;
+        VkDescriptorSetLayout viewProjectionLayout;
         VkDescriptorSetLayout lightsLayout;
         VkDescriptorPool lightsDescriptorPool;
         VkDescriptorSet shadowDescriptorSet;
@@ -69,6 +87,10 @@ namespace rn {
         List<VkImageView> *swapChainImageViews;
         VkExtent2D windowExtents;
         VkExtent2D viewportExtends;
+        ImVec2 viewportPos;
+        glm::vec3 cameraForward;
+        bool beginGizmoDrag = false;
+
         size_t currentImageIndex;
         List<VkDescriptorSet> *imguiViewPortDescriptors;
 
@@ -80,9 +102,15 @@ namespace rn {
 
         void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
 
+        ViewProjection *(*GetViewProjectionMatrix)();
+
         void (*SetUpAsDirectionalLight)(class OmniDirectionalLight *directionalLight);
 
         void (*AddRendererEvent)(const RendererEvent &event);
+
+        std::uint32_t (*GetActiveClickedObjectId)();
+
+        AXIS (*GetActiveGizmoAxis)();
     };
 
 
@@ -112,10 +140,11 @@ namespace rn {
 
         static void CreateBuffer(RendererContext &ctx, VkBuffer &buffer, VkBufferUsageFlags usageFlags,
                                  VkDeviceMemory &bufferMemory, VkMemoryPropertyFlags bufferMemoryFlags,
-                                 VkDeviceSize requiredBufferSize, std::string &bufferName);
+                                 VkDeviceSize requiredBufferSize, const std::string &bufferName);
 
         static std::uint32_t FindMemoryIndices(VkPhysicalDevice physicalDevice, uint32_t allowedTypes,
-                                               VkMemoryPropertyFlags requiredMemoryFlags, std::string &bufferName);
+                                               VkMemoryPropertyFlags requiredMemoryFlags,
+                                               const std::string &bufferName);
 
         static VkCommandBuffer BeginCommandBuffer(RendererContext ctx);
 

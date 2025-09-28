@@ -13,6 +13,7 @@ namespace rn {
         List<Vertex> mVertList{};
         List<std::uint32_t> mIndicesList{};
         std::uint32_t mIndicesCount;
+        std::uint32_t mPickId;
 
         VkBuffer mVertexBuffer{};
         VkBuffer mIndexBuffer{};
@@ -26,7 +27,8 @@ namespace rn {
         void CalculateAverageNormals();
 
     public:
-        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::string &textureId,
+        StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::uint32_t pickId,
+                   std::string &textureId,
                    bool calculateNormals);
 
         ~StaticMesh();
@@ -72,9 +74,15 @@ namespace rn {
             mModelMatrix = modelMatrix;
         }
 
+        void SetModelMatrixTranslatePos(const glm::vec3 pos) {
+            mModelMatrix[3] = glm::vec4{pos, 1.0};
+        }
+
         const glm::mat4 &GetModelMatrix() const { return mModelMatrix; }
 
         List<Vertex> &GetVertexList() { return mVertList; };
+
+        std::uint32_t GetPickId() const { return mPickId; }
     };
 }
 #endif //SMALLVKENGINE_STATICMESH_H

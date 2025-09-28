@@ -9,7 +9,7 @@ namespace rn {
     std::uint32_t Utility::MAX_OBJECTS = 1000;
 
     std::uint32_t Utility::FindMemoryIndices(VkPhysicalDevice physicalDevice, std::uint32_t requiredIndex,
-                                             VkMemoryPropertyFlags requiredMemoryFlags, std::string &bufferName) {
+                                             VkMemoryPropertyFlags requiredMemoryFlags, const std::string &bufferName) {
         VkPhysicalDeviceMemoryProperties memoryProperties{};
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
         for (size_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
@@ -24,7 +24,7 @@ namespace rn {
 
     void Utility::CreateBuffer(rn::RendererContext &ctx, VkBuffer &buffer, VkBufferUsageFlags usageFlags,
                                VkDeviceMemory &bufferMemory, VkMemoryPropertyFlags bufferMemoryFlags,
-                               VkDeviceSize requiredBufferSize, std::string &bufferName) {
+                               VkDeviceSize requiredBufferSize, const std::string &bufferName) {
         VkBufferCreateInfo createBufferInfo{};
         createBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         createBufferInfo.size = requiredBufferSize;

@@ -9,6 +9,7 @@
 #include "Core/Constants.h"
 #include "Utility.h"
 #include "StaticMesh.h"
+#include "Core/GizmoController.h"
 
 namespace vk {
     class GameObject;
@@ -20,6 +21,7 @@ namespace vk {
         rn::StaticMesh *mStaticMesh;
         std::string mTextureId;
         bool mCalculateNormals;
+        GizmoDragController gizmoDragController{};
     public:
         MeshComponent(GameObject *gameObject, const std::string &id, List<rn::Vertex> &vertices,
                       List<std::uint32_t> &indices, std::string textureId = "", bool calculateNormals = false);

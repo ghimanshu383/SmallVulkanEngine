@@ -29,6 +29,13 @@ add_library(${RENDERER} STATIC
         include/lights/ShadowMap.h
         src/lights/ShadowMap.cpp
         include/BlockingQueue.h
+        src/imgui/ImGradient.cpp
+        src/imgui/GraphEditor.cpp
+        src/imgui/ImCurveEdit.cpp
+        src/imgui/ImGuizmo.cpp
+        src/imgui/ImSequencer.cpp
+        include/Gizmos.h
+        src/Gizmos.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

@@ -5,7 +5,8 @@
 #include "Components/TransformComponent.h"
 
 namespace vk {
-    GameObject::GameObject(vk::Scene *scene) : mScene{scene}, IsPendingDestroy{false} {
+    GameObject::GameObject(vk::Scene *scene, std::uint32_t pickId) : mScene{scene}, IsPendingDestroy{false},
+                                                                     mPickId{pickId} {
 
     }
 

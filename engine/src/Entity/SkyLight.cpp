@@ -7,8 +7,9 @@
 #include "Entity/Scene.h"
 
 namespace vk {
-    SkyLight::SkyLight(Scene *scene, std::string id, const rn::OmniDirectionalInfo &directionalInfo) : GameObject(
-            scene), m_id(std::move(id)), mDirectionalLightInfo{directionalInfo} {
+    SkyLight::SkyLight(Scene *scene, std::uint32_t pickId, std::string id,
+                       const rn::OmniDirectionalInfo &directionalInfo) : GameObject(
+            scene, pickId), m_id(std::move(id)), mDirectionalLightInfo{directionalInfo} {
 
     }
 
