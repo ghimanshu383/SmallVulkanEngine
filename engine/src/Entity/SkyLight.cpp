@@ -1,8 +1,11 @@
 //
 // Created by ghima on 13-09-2025.
 //
-#include <utility>
+#define GLM_ENABLE_EXPERIMENTAL
 
+#include <utility>
+#include <Components/TransformComponent.h>
+#include <glm/gtx/string_cast.hpp>
 #include "Entity/SkyLight.h"
 #include "Entity/Scene.h"
 
@@ -22,5 +25,10 @@ namespace vk {
 
     void SkyLight::Tick(float DeltaTime) {
         GameObject::Tick(DeltaTime);
+        // Setting up the Direction of the light based on the mesh;
+        std::shared_ptr<TransformComponent> transformComponent = GetComponentType<TransformComponent>();
+        if (transformComponent != nullptr) {
+            mDirectionalLight->SetLightPosition(transformComponent->GetModelMatrix()[3]);
+        }
     }
 }

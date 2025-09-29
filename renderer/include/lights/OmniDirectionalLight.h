@@ -45,6 +45,11 @@ namespace rn {
         ShadowMap *GetShadowMap() const;
 
         void ComputeViewProjection();
+
+        // Setters
+        void SetLightPosition(const glm::vec4& position) {
+            mLightInfo.position = position;
+        }
     };
 }
 #endif //SMALLVKENGINE_OMNIDIRECTIONALLIGHT_H

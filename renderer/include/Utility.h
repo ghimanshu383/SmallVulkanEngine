@@ -56,6 +56,7 @@ namespace rn {
             WINDOW_RESIZE,
             VIEW_PORT_RESIZE,
             VIEW_PORT_CLICKED,
+            MOUSE_RELEASED
         };
         Type type;
         uint32_t width;

@@ -55,6 +55,15 @@ namespace rn {
                         mMouseXPos = event.clickX;
                         mMouseYPos = event.clickY;
                         isViewPortClicked = true;
+                        // This can be consume if the click is on the gizmo
+                        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
+                        mRendererContext.beginGizmoDrag = true;
+                        break;
+                    }
+                    case RendererEvent::Type::MOUSE_RELEASED : {
+
+                        mRendererContext.beginGizmoDrag = false;
+                        activeGizmoAxis = AXIS::NONE;
                     }
                 }
                 mShouldRender.store(true, std::memory_order_release);
@@ -500,7 +509,7 @@ namespace rn {
 
     void Graphics::ReCreateSwapChain() {
         // This function handles the recreation and resizing of the window and re-creating the frame buffers and image views for the swapchain;
-        vkDeviceWaitIdle(mRendererContext.logicalDevice);
+        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, true, UINT64_MAX);
         // Deleting the previous swapchain;
         for (int i = 0; i < mSwapChainImageViews.size(); i++) {
             vkDestroyFramebuffer(mRendererContext.logicalDevice, mFrameBuffers[i], nullptr);
@@ -1089,7 +1098,6 @@ namespace rn {
         mMutex.lock();
         vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mDevices.logicalDevice, 1, &mPresentFinishFence);
-        SetActiveClickObject();
         VkResult result = vkAcquireNextImageKHR(mDevices.logicalDevice, mSwapChain, UINT64_MAX, mGetImageSemaphore,
                                                 nullptr,
                                                 &mCurrentImageIndex);
@@ -1217,6 +1225,7 @@ namespace rn {
             LOG_ERROR("Swapchain Present Error.. Render is Exiting");
             std::exit(EXIT_FAILURE);
         }
+        SetActiveClickObject();
         mMutex.unlock();
     }
 
@@ -1724,7 +1733,6 @@ namespace rn {
     void Graphics::CopyMouseImageToBuffer() {
         if (isViewPortClicked && mViewport.width >= (float) mMouseXPos > 0 &&
             mViewport.height >= (float) mMouseYPos > 0) {
-
             VkBufferImageCopy region{};
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             region.imageSubresource.mipLevel = 0;
@@ -1735,6 +1743,7 @@ namespace rn {
 
             vkCmdCopyImageToBuffer(mCommandBuffer, mMousePickingImages[mCurrentImageIndex],
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mMousePickingBuffer, 1, &region);
+            mRendererContext.beginGizmoDrag = true;
         }
         isViewPortClicked = false;
     }

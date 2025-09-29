@@ -55,13 +55,12 @@ namespace vk {
             // Changing the transform matrix based on the gizmo positions;
 
             bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-            bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
             bool mouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
             if (mOwningGameObject->GetPickId() ==
                 mOwningGameObject->GetScene()->GetRendererContext()->GetActiveClickedObjectId() &&
                 ctx->GetActiveGizmoAxis() != rn::AXIS::NONE) {
-                if (mouseClicked) {
+                if (ctx->beginGizmoDrag) {
                     gizmoDragController.BeginDrag(static_cast<int>(ctx->GetActiveGizmoAxis()),
                                                   glm::vec3{transformComponent->GetModelMatrix()[3]},
                                                   ctx->GetViewProjectionMatrix()->view,
@@ -71,6 +70,7 @@ namespace vk {
                                                   ctx->viewportExtends.width,
                                                   ctx->viewportExtends.height,
                                                   ctx->cameraForward);
+                    ctx->beginGizmoDrag = false;
                 }
                 if (gizmoDragController.IsDragging() && mousePressed) {
                     glm::vec3 newPos = gizmoDragController.UpdateDrag(
@@ -85,6 +85,7 @@ namespace vk {
                 }
                 if (mouseReleased) {
                     gizmoDragController.EndDrag();
+                    ctx->AddRendererEvent({rn::RendererEvent::Type::MOUSE_RELEASED});
                 }
             }
         }

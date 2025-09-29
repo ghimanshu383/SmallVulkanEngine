@@ -1,6 +1,8 @@
 //
 // Created by ghima on 10-09-2025.
 //
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
 #include "lights/OmniDirectionalLight.h"
 #include "lights/ShadowMap.h"
 

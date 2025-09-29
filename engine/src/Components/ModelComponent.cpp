@@ -120,9 +120,9 @@ namespace vk {
         std::sprintf(buffer, "%s-mesh-%zu", id.c_str(), mMeshCompList.size() + 1);
 
         std::string texId = R"(D:\cProjects\SmallVkEngine\textures\colormap.png)";
-        std::shared_ptr<MeshComponent> meshComponent = std::make_shared<MeshComponent>(mOwningGameObject,
-                                                                                       std::string{buffer}, vertices,
-                                                                                       indices, texId, true);
+        std::shared_ptr<MeshComponent> meshComponent = mOwningGameObject->SpawnComponent<MeshComponent>(
+                std::string{buffer}, vertices,
+                indices, texId, true);
         meshList.push_back(meshComponent);
     }
 
