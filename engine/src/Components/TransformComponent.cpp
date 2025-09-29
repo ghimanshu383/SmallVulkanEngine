@@ -19,8 +19,6 @@ namespace vk {
 
     void TransformComponent::BeginPlay() {
         Component::BeginPlay();
-        ImguiEditor::GetInstance(mOwningGameObject->GetScene()->GetRendererContext())->GetGuiDelegate()->Register(this,
-                                                                                                                  &TransformComponent::SetUpTransformGizmo);
     }
 
     void TransformComponent::setTranslate(glm::vec3 value) {
@@ -43,8 +41,17 @@ namespace vk {
         mModelMatrix = glm::scale(mModelMatrix, value);
     }
 
-    bool TransformComponent::SetUpTransformGizmo() {
+    bool TransformComponent::SetUpGuiInspector() {
+        if (mOwningGameObject->GetPickId() == Component::ctx->GetActiveClickedObjectId()) {
+            float speed = 0.05f;
+            float minVal = -100.0f;
+            float maxVal = 100.0f;
 
+            if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::DragFloat3("POSITION", glm::value_ptr(mModelMatrix[3]), speed, minVal, maxVal, "%.2f",
+                                  ImGuiInputTextFlags_EnterReturnsTrue);
+            }
+        }
         return true;
     }
 }

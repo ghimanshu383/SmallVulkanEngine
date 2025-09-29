@@ -18,6 +18,7 @@ namespace vk {
         bool IsPendingDestroy;
         Scene *mScene;
         std::uint32_t mPickId;
+        void SetUpGameObjectGui();
     public:
         explicit GameObject(Scene *scene, std::uint32_t pickId);
 

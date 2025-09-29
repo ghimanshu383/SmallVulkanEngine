@@ -34,7 +34,7 @@ namespace vk {
             mModelMatrix[3] = glm::vec4{pos, 1.0};
         }
 
-        bool SetUpTransformGizmo();
+        bool SetUpGuiInspector();
     };
 }
 #endif //SMALLVKENGINE_TRANSFORMCOMPONENT_H

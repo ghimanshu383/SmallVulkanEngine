@@ -11,12 +11,12 @@
 namespace vk {
     ImguiEditor *ImguiEditor::instance = nullptr;
     rn::RendererContext *ImguiEditor::mCtx = nullptr;
-    Delegate<> *ImguiEditor::mGuiDelegate = nullptr;
+    Delegate<> *ImguiEditor::mGuiInspectorDelegate = nullptr;
 
     ImguiEditor *ImguiEditor::GetInstance(rn::RendererContext *ctx) {
         if (instance == nullptr) {
             mCtx = ctx;
-            mGuiDelegate = new Delegate<>();
+            mGuiInspectorDelegate = new Delegate<>();
             instance = new ImguiEditor();
         }
         return instance;
@@ -32,7 +32,12 @@ namespace vk {
 
 
         Logger::GetInstance()->SetUpLogConsole();
+        SetupViewport();
+        SetupInspectorWindow();
+        ImGui::Render();
+    }
 
+    void ImguiEditor::SetupViewport() {
         ImGui::Begin("Viewport");
         ImVec2 viewportPos = ImGui::GetCursorScreenPos();
         ImVec2 mousePos = ImGui::GetMousePos();
@@ -59,6 +64,14 @@ namespace vk {
                                     static_cast<uint32_t>(viewportSize.y)});
         }
         ImGui::End();
-        ImGui::Render();
+    }
+
+    void ImguiEditor::SetupInspectorWindow() {
+        ImGui::Begin("Inspector");
+        if (mCtx->GetActiveClickedObjectId() == 0) {
+            ImGui::Text("No Object is Selected");
+        }
+        mGuiInspectorDelegate->Invoke();
+        ImGui::End();
     }
 }
