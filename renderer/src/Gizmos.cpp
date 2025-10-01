@@ -7,10 +7,11 @@
 namespace rn {
     Gizmos::Gizmos(RendererContext *ctx) : mTranslateMesh{nullptr}, mCtx{ctx} {
         SetUpMesh();
-        CreatePipeline();
+        CreatePipeline(TOPOLOGY_TYPE::LINES);
+        CreatePipeline(TOPOLOGY_TYPE::TRIANGLES);
     }
 
-    void Gizmos::CreatePipeline() {
+    void Gizmos::CreatePipeline(TOPOLOGY_TYPE type) {
         VkShaderModule vertexShaderModule = Utility::CreateShaderModule(mCtx->logicalDevice,
                                                                         R"(D:\cProjects\SmallVkEngine\Shaders\gizmo.ver.spv)");
         VkShaderModule fragShaderModule = Utility::CreateShaderModule(mCtx->logicalDevice,
@@ -88,7 +89,8 @@ namespace rn {
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{};
         inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        inputAssemblyStateCreateInfo.topology =
+                type == TOPOLOGY_TYPE::LINES ? VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
 
         VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo{};
@@ -151,14 +153,16 @@ namespace rn {
         layoutCreateInfo.pPushConstantRanges = pushConstants.data();
         layoutCreateInfo.flags = 0;
 
-        Utility::CheckVulkanError(vkCreatePipelineLayout(mCtx->logicalDevice, &layoutCreateInfo, nullptr, &mLayout),
+        Utility::CheckVulkanError(vkCreatePipelineLayout(mCtx->logicalDevice, &layoutCreateInfo, nullptr,
+                                                         type == TOPOLOGY_TYPE::LINES ? &mLayoutLines
+                                                                                      : &mLayoutTriangles),
                                   "Failed to create the layout for the gizmos");
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.renderPass = mCtx->offScreenRenderPass;
         pipelineCreateInfo.subpass = 0;
-        pipelineCreateInfo.layout = mLayout;
+        pipelineCreateInfo.layout = type == TOPOLOGY_TYPE::LINES ? mLayoutLines : mLayoutTriangles;
         pipelineCreateInfo.stageCount = shaderStages.size();
         pipelineCreateInfo.pStages = shaderStages.data();
         pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
@@ -171,7 +175,8 @@ namespace rn {
         pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 
         Utility::CheckVulkanError(vkCreateGraphicsPipelines(mCtx->logicalDevice, nullptr, 1, &pipelineCreateInfo,
-                                                            nullptr, &mGizmoPipeline),
+                                                            nullptr, type == TOPOLOGY_TYPE::LINES ? &mGizmoPipelineLines
+                                                                                                  : &mGizmoPipelineTriangles),
                                   "Failed to create the gizmos pipeline");
         vkDestroyShaderModule(mCtx->logicalDevice, vertexShaderModule, nullptr);
         vkDestroyShaderModule(mCtx->logicalDevice, fragShaderModule, nullptr);
@@ -181,73 +186,96 @@ namespace rn {
     void Gizmos::SetUpMesh() {
         List<Vertex> gizmoVertices = {
                 // X Axis (Red)
-                {{0.0f,        0.0f,        0.0f},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{AXIS_LENGTH, 0.0f,        0.0f},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
-                // Arrowhead (triangle) for X
-                {{AXIS_LENGTH, ARROW_SIZE,  0.0f},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-                {{AXIS_LENGTH, -ARROW_SIZE, 0.0f},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{0.0f,             0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{AXIS_LENGTH,      0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
 
                 // Y Axis (Green)
-                {{0.0f,        0.0f,        0.0f},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{0.0f,        AXIS_LENGTH, 0.0f},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
-                // Arrowhead for Y
-                {{ARROW_SIZE,  AXIS_LENGTH, 0.0f},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-                {{-ARROW_SIZE, AXIS_LENGTH, 0.0f},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{0.0f,             0.0f,             0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{0.0f,             AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
 
                 // Z Axis (Blue)
-                {{0.0f,        0.0f,        0.0f},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{0.0f,        0.0f,        AXIS_LENGTH}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
-                // Arrowhead for Z
-                {{0.0f,        ARROW_SIZE,  AXIS_LENGTH}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-                {{0.0f,        -ARROW_SIZE, AXIS_LENGTH}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{0.0f,             0.0f,             0.0f},             {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{0.0f,             0.0f,             AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
+
+                // Triangles on Top of the lines;
+                // tip
+                {{AXIS_LENGTH +
+                  ARROW_TIP_LENGTH, 0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                // base upper
+                {{AXIS_LENGTH,      ARROW_BASE_SIZE,  0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                // base lower
+                {{AXIS_LENGTH,      -ARROW_BASE_SIZE, 0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+
+                // tip
+                {{0.0f,             AXIS_LENGTH +
+                                    ARROW_TIP_LENGTH, 0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+// base right
+                {{ARROW_BASE_SIZE,  AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+// base left
+                {{-ARROW_BASE_SIZE, AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+
+                // tip
+                {{0.0f,             0.0f,             AXIS_LENGTH +
+                                                      ARROW_TIP_LENGTH}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+// base top
+                {{0.0f,             ARROW_BASE_SIZE,  AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+// base bottom
+                {{0.0f,             -ARROW_BASE_SIZE, AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
         };
 
         std::vector<uint32_t> indices = {
                 // X axis line
                 0, 1,
-                // X axis arrow
-                1, 2, 1, 3, 2, 3,
-
                 // Y axis line
-                4, 5,
-                // Y axis arrow
-                5, 6, 5, 7, 6, 7,
-
+                2, 3,
                 // Z axis line
-                8, 9,
-                // Z axis arrow
-                9, 10, 9, 11, 10, 11
+                4, 5,
+                //Triangles.
+                6, 7, 8,
+                9, 10, 11,
+                12, 13, 14
         };
         std::string noTex;
         mTranslateMesh = new StaticMesh(*mCtx, gizmoVertices, indices, 0, noTex, false);
     }
 
     void Gizmos::DrawGizmos(size_t currentImageIndex) {
-        std::uint32_t activeId = static_cast<std::uint32_t>(mCtx->GetActiveGizmoAxis());
-        mTranslateMesh->SetModelMatrix(mModelMatrix);
-        vkCmdBindPipeline(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mGizmoPipeline);
-        vkCmdSetLineWidth(mCtx->mainCommandBuffer, LINE_WIDTH);
-        VkDeviceSize offset = {};
-        VkBuffer vertexBuffer = mTranslateMesh->GetVertexBuffer();
-        vkCmdBindVertexBuffers(mCtx->mainCommandBuffer, 0, 1, &vertexBuffer, &offset);
-        vkCmdBindIndexBuffer(mCtx->mainCommandBuffer, mTranslateMesh->GetIndexBuffer(), offset, VK_INDEX_TYPE_UINT32);
+        for (int i = 0; i < 2; i++) {
+            std::uint32_t activeId = static_cast<std::uint32_t>(mCtx->GetActiveGizmoAxis());
+            mTranslateMesh->SetModelMatrix(mModelMatrix);
+            vkCmdBindPipeline(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              i == 0 ? mGizmoPipelineLines : mGizmoPipelineTriangles);
+            vkCmdSetLineWidth(mCtx->mainCommandBuffer, LINE_WIDTH);
+            VkDeviceSize offset = {};
+            VkBuffer vertexBuffer = mTranslateMesh->GetVertexBuffer();
+            vkCmdBindVertexBuffers(mCtx->mainCommandBuffer, 0, 1, &vertexBuffer, &offset);
+            vkCmdBindIndexBuffer(mCtx->mainCommandBuffer, mTranslateMesh->GetIndexBuffer(), offset,
+                                 VK_INDEX_TYPE_UINT32);
 
-        std::uint32_t dyOffset = 0;
-        vkCmdBindDescriptorSets(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mLayout, 0, 1,
-                                &(mCtx->viewProjectionDescriptorSet[currentImageIndex]), 1,
-                                &dyOffset);
+            std::uint32_t dyOffset = 0;
+            vkCmdBindDescriptorSets(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    i == 0 ? mLayoutLines : mLayoutTriangles, 0, 1,
+                                    &(mCtx->viewProjectionDescriptorSet[currentImageIndex]), 1,
+                                    &dyOffset);
 
-        ModelUBO modelUbo = {mTranslateMesh->GetModelMatrix(), activeId};
-        vkCmdPushConstants(mCtx->mainCommandBuffer, mLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelUBO),
-                           &modelUbo);
-        vkCmdDrawIndexed(mCtx->mainCommandBuffer, mTranslateMesh->GetStaticMeshIndicesCount(), 1,
-                         0, 0, 0);
+            ModelUBO modelUbo = {mTranslateMesh->GetModelMatrix(), activeId};
+            vkCmdPushConstants(mCtx->mainCommandBuffer, i == 0 ? mLayoutLines : mLayoutTriangles,
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelUBO),
+                               &modelUbo);
+            if (i == 0) {
+                vkCmdDrawIndexed(mCtx->mainCommandBuffer, 6, 1, 0, 0, 0);
+            } else {
+                vkCmdDrawIndexed(mCtx->mainCommandBuffer, 9, 1, 6, 0, 0);
+            }
+        }
+
     }
 
     Gizmos::~Gizmos() {
         delete mTranslateMesh;
-        vkDestroyPipeline(mCtx->logicalDevice, mGizmoPipeline, nullptr);
-        vkDestroyPipelineLayout(mCtx->logicalDevice, mLayout, nullptr);
+        vkDestroyPipeline(mCtx->logicalDevice, mGizmoPipelineLines, nullptr);
+        vkDestroyPipeline(mCtx->logicalDevice, mGizmoPipelineTriangles, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mLayoutLines, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mLayoutTriangles, nullptr);
     }
-
 }

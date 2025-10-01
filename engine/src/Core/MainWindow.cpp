@@ -155,7 +155,7 @@ namespace vk {
         std::shared_ptr<TransformComponent> planTran = plane->SpawnComponent<TransformComponent>(
                 "PlaneTransformComponent");
         planTran->setTranslate({0, 0, 0});
-        planTran->setRotationX(90.f);
+        planTran->setRotation({90, 0, 0});
         planTran->setScale({10, 10, 10,});
 
 

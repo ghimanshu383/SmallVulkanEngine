@@ -81,7 +81,8 @@ namespace vk {
                             ctx->GetViewProjectionMatrix()->view,
                             ctx->GetViewProjectionMatrix()->projection
                     );
-                    transformComponent->SetModelMatrixTranslate(newPos);
+                    transformComponent->SetPosition(newPos);
+                    transformComponent->UpdateModelMatrix();
                 }
                 if (mouseReleased) {
                     gizmoDragController.EndDrag();
