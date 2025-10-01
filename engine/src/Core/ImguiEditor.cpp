@@ -12,11 +12,13 @@ namespace vk {
     ImguiEditor *ImguiEditor::instance = nullptr;
     rn::RendererContext *ImguiEditor::mCtx = nullptr;
     Delegate<> *ImguiEditor::mGuiInspectorDelegate = nullptr;
+    Delegate<> *ImguiEditor::mGuiViewportDelegate = nullptr;
 
     ImguiEditor *ImguiEditor::GetInstance(rn::RendererContext *ctx) {
         if (instance == nullptr) {
             mCtx = ctx;
             mGuiInspectorDelegate = new Delegate<>();
+            mGuiViewportDelegate = new Delegate<>();
             instance = new ImguiEditor();
         }
         return instance;
@@ -63,6 +65,7 @@ namespace vk {
                                     static_cast<uint32_t>(viewportSize.x),
                                     static_cast<uint32_t>(viewportSize.y)});
         }
+        mGuiViewportDelegate->Invoke();
         ImGui::End();
     }
 

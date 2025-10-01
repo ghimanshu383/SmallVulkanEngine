@@ -19,12 +19,20 @@ namespace rn {
     using List = std::vector<T>;
     template<typename T, typename R, typename S>
     using Map = std::unordered_map<T, R, S>;
+
     enum class AXIS {
         NONE = 0,
         X = 1,
         Y = 2,
         Z = 3
     };
+
+    enum class GIZMO_TYPE {
+        TRANSLATE,
+        ROTATE,
+        SCALE
+    };
+
     struct Vertex {
         glm::vec3 pos;
         glm::vec4 color;
@@ -112,6 +120,10 @@ namespace rn {
         std::uint32_t (*GetActiveClickedObjectId)();
 
         AXIS (*GetActiveGizmoAxis)();
+
+        void (*SetGizmoType)(const GIZMO_TYPE &type);
+
+        GIZMO_TYPE (*GetGizmoType)();
     };
 
 

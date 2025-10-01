@@ -17,10 +17,12 @@ namespace vk {
 
         static ImguiEditor *instance;
         static Delegate<> *mGuiInspectorDelegate;
+        static Delegate<> *mGuiViewportDelegate;
         ImVec2 localMousePos{};
         bool IsMouseLeftDown{};
 
         void SetupViewport();
+
         void SetupInspectorWindow();
 
     public:
@@ -29,6 +31,9 @@ namespace vk {
         void RenderGui();
 
         Delegate<> *GetGuiInspectorDelegate() const { return mGuiInspectorDelegate; };
+
+        Delegate<> *GetGuiViewportDelegate() const { return mGuiViewportDelegate; }
+
 
         ImVec2 GetLocalMousePos() {
             return localMousePos;

@@ -42,6 +42,18 @@ namespace vk {
             mPosition = position;
         }
 
+        void SetScale(const glm::vec3 &scale) {
+            mScale = scale;
+        }
+
+        void SetRotation(const glm::vec3 &rotation) {
+            mRotations = rotation;
+        }
+
+        const glm::vec3 &GetScale() const { return mScale; }
+
+        const glm::vec3 &GetRotation() const { return mRotations; }
+
     };
 }
 #endif //SMALLVKENGINE_TRANSFORMCOMPONENT_H

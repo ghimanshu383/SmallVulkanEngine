@@ -3,7 +3,6 @@
 //
 #define GLM_ENABLE_EXPERIMENTAL
 
-#include <utility>
 #include <glm/gtx/string_cast.hpp>
 
 #include "Components/MeshComponent.h"
@@ -45,6 +44,7 @@ namespace vk {
         }
 
         Component::ctx->RegisterMesh(id, mStaticMesh);
+        ImguiEditor::GetInstance(ctx)->GetGuiViewportDelegate()->Register(this, &MeshComponent::ViewportKeyHandler);
     }
 
     void MeshComponent::Tick(float DeltaTime) {
@@ -63,6 +63,8 @@ namespace vk {
                 if (ctx->beginGizmoDrag) {
                     gizmoDragController.BeginDrag(static_cast<int>(ctx->GetActiveGizmoAxis()),
                                                   glm::vec3{transformComponent->GetModelMatrix()[3]},
+                                                  transformComponent->GetScale(),
+                                                  transformComponent->GetRotation(),
                                                   ctx->GetViewProjectionMatrix()->view,
                                                   ctx->GetViewProjectionMatrix()->projection,
                                                   ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
@@ -73,16 +75,40 @@ namespace vk {
                     ctx->beginGizmoDrag = false;
                 }
                 if (gizmoDragController.IsDragging() && mousePressed) {
-                    glm::vec3 newPos = gizmoDragController.UpdateDrag(
-                            ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
-                            ImguiEditor::GetInstance(ctx)->GetLocalMousePos().y,
-                            ctx->viewportExtends.width,
-                            ctx->viewportExtends.height,
-                            ctx->GetViewProjectionMatrix()->view,
-                            ctx->GetViewProjectionMatrix()->projection
-                    );
-                    transformComponent->SetPosition(newPos);
-                    transformComponent->UpdateModelMatrix();
+                    if (ctx->GetGizmoType() == rn::GIZMO_TYPE::TRANSLATE) {
+                        glm::vec3 newPos = gizmoDragController.UpdateDrag(
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().y,
+                                ctx->viewportExtends.width,
+                                ctx->viewportExtends.height,
+                                ctx->GetViewProjectionMatrix()->view,
+                                ctx->GetViewProjectionMatrix()->projection
+                        );
+                        transformComponent->SetPosition(newPos);
+                        transformComponent->UpdateModelMatrix();
+                    } else if (ctx->GetGizmoType() == rn::GIZMO_TYPE::SCALE) {
+                        glm::vec3 newScale = gizmoDragController.UpdateScale(
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().y,
+                                ctx->viewportExtends.width,
+                                ctx->viewportExtends.height,
+                                ctx->GetViewProjectionMatrix()->view,
+                                ctx->GetViewProjectionMatrix()->projection
+                        );
+                        transformComponent->SetScale(newScale);
+                        transformComponent->UpdateModelMatrix();
+                    } else if (ctx->GetGizmoType() == rn::GIZMO_TYPE::ROTATE) {
+                        glm::vec3 newRotation = gizmoDragController.UpdateRotation(
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
+                                ImguiEditor::GetInstance(ctx)->GetLocalMousePos().y,
+                                ctx->viewportExtends.width,
+                                ctx->viewportExtends.height,
+                                ctx->GetViewProjectionMatrix()->view,
+                                ctx->GetViewProjectionMatrix()->projection
+                        );
+                        transformComponent->SetRotation(newRotation);
+                        transformComponent->UpdateModelMatrix();
+                    }
                 }
                 if (mouseReleased) {
                     gizmoDragController.EndDrag();
@@ -90,5 +116,16 @@ namespace vk {
                 }
             }
         }
+    }
+
+    bool MeshComponent::ViewportKeyHandler() {
+        if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+            ctx->SetGizmoType(rn::GIZMO_TYPE::TRANSLATE);
+        } else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+            ctx->SetGizmoType(rn::GIZMO_TYPE::ROTATE);
+        } else if (ImGui::IsKeyPressed(ImGuiKey_T)) {
+            ctx->SetGizmoType(rn::GIZMO_TYPE::SCALE);
+        }
+        return true;
     }
 }

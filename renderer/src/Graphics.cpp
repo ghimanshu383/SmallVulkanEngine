@@ -25,6 +25,7 @@ namespace rn {
     std::uint32_t Graphics::mActiveClickObject = 0;
     bool Graphics::isViewPortClicked = false;
     AXIS Graphics::activeGizmoAxis = AXIS::NONE;
+    Gizmos *Graphics::mGizmos = nullptr;
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -70,6 +71,14 @@ namespace rn {
             }
         });
         mEventListenerThread.detach();
+    }
+
+    void Graphics::SetGizmoType(const rn::GIZMO_TYPE &type) {
+        mGizmos->SetGizmoType(type);
+    }
+
+    GIZMO_TYPE Graphics::GetGizmoType() {
+        return mGizmos->GetGizmoType();
     }
 
     void Graphics::InitVulkan() {
@@ -1765,6 +1774,7 @@ namespace rn {
         mActiveClickObject = *data;
         vkUnmapMemory(mDevices.logicalDevice, mMousePickingBufferMemory);
     }
+
 
 #pragma endregion
 }

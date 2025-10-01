@@ -34,6 +34,8 @@ namespace vk {
 
         virtual void Tick(float DeltaTime) override;
 
+        bool ViewportKeyHandler();
+
     };
 }
 #endif //SMALLVKENGINE_MESHCOMPONENT_H
