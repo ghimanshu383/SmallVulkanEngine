@@ -36,6 +36,8 @@ add_library(${RENDERER} STATIC
         src/imgui/ImSequencer.cpp
         include/Gizmos.h
         src/Gizmos.cpp
+        include/lights/PointLights.h
+        src/lights/PointLights.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

@@ -95,6 +95,9 @@ namespace rn {
         // Lights Descriptor sets;
         VkDescriptorSetLayout mLightsDescriptorSetLayout;
         VkDescriptorPool mLightDescriptorPool;
+        // Point lights Descriptor sets;
+        VkDescriptorSetLayout mPointLightDescriptorSetLayout{};
+        VkDescriptorPool mPointLightDescriptorPool{};
 
 #pragma endregion
 #pragma region Depth_Buffer
@@ -108,6 +111,8 @@ namespace rn {
         static Map<std::string, class Texture *, std::hash<std::string>> mTextureMap;
 
         static class OmniDirectionalLight *mDirectionalLight;
+
+        static class PointLights *mPointLights;
 
 #pragma endregion
 #pragma region Shadow

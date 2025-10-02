@@ -8,6 +8,7 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
 #include "lights/OmniDirectionalLight.h"
+#include "lights/PointLights.h"
 #include "lights/ShadowMap.h"
 #include "Gizmos.h"
 
@@ -18,6 +19,7 @@ namespace rn {
     Map<std::string, Texture *, std::hash<std::string>> Graphics::mTextureMap = {};
     RendererContext Graphics::mRendererContext = {};
     OmniDirectionalLight *Graphics::mDirectionalLight = nullptr;
+    PointLights *Graphics::mPointLights = nullptr;
     std::atomic<bool> Graphics::mShouldRender = {true};
     BlockingQueue<RendererEvent> Graphics::mEventQueue = {};
     std::uint32_t Graphics::mMouseYPos = 0;
@@ -57,7 +59,9 @@ namespace rn {
                         mMouseYPos = event.clickY;
                         isViewPortClicked = true;
                         // This can be consume if the click is on the gizmo
-                        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
+                        //  vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
+                        vkDeviceWaitIdle(
+                                mDevices.logicalDevice);           // This is required for the drag to be in sync with fences it was not syncing
                         mRendererContext.beginGizmoDrag = true;
                         break;
                     }
@@ -112,6 +116,8 @@ namespace rn {
 
         StartRenderEventListener();
         mGizmos = new Gizmos(&mRendererContext);
+        // Setting up the context for the point lights;
+        mPointLights = new PointLights{&mRendererContext};
 
     }
 
@@ -136,6 +142,7 @@ namespace rn {
         }
         // Just for testing the light make the light in the engine as a game object;
         delete mDirectionalLight;
+        delete mPointLights;
         vkDestroySampler(mDevices.logicalDevice, mTextureSampler, nullptr);
         vkDestroySampler(mDevices.logicalDevice, mOffScreenImageSampler, nullptr);
 
@@ -147,6 +154,8 @@ namespace rn {
         vkDestroyDescriptorPool(mDevices.logicalDevice, mLightDescriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mShadowLayout, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mShadowDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mPointLightDescriptorSetLayout, nullptr);
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mPointLightDescriptorPool, nullptr);
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -860,7 +869,8 @@ namespace rn {
         CreateTextureDefaultSampler();
         mRendererContext.viewProjectionLayout = mViewProjectionDescriptorSetLayout;
         List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout,
-                                               mLightsDescriptorSetLayout, mShadowLayout};
+                                               mLightsDescriptorSetLayout, mShadowLayout,
+                                               mPointLightDescriptorSetLayout};
 
         VkPushConstantRange pushConstantRange{};
         pushConstantRange.offset = 0;
@@ -1149,6 +1159,7 @@ namespace rn {
             if (mDirectionalLight != nullptr) {
                 mDirectionalLight->UpdateLightDescriptorSet(mCurrentImageIndex);
             }
+            mPointLights->UpdatePointLightBuffers(mCurrentImageIndex);
 
             VkDescriptorSet textureDescriptor{};
             Map<std::string, Texture *, std::hash<std::string>>::iterator texIter = mTextureMap.find(
@@ -1167,6 +1178,7 @@ namespace rn {
                 //   descriptorSets.push_back(mDirectionalLight->GetViewProjectionDescriptorSets(mCurrentImageIndex));
                 descriptorSets.push_back(mShadowDescriptorSet);
             }
+            descriptorSets.push_back(mPointLights->GetDescriptorSet(mCurrentImageIndex));
             vkCmdPushConstants(mCommandBuffer, mPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
                                &iter->second->GetModelMatrix());
             vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
@@ -1334,6 +1346,7 @@ namespace rn {
         lightsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         lightsLayoutBinding.pImmutableSamplers = nullptr;
 
+
 //        VkDescriptorSetLayoutBinding lightViewProjectionBinding{};
 //        lightViewProjectionBinding.binding = 1;
 //        lightViewProjectionBinding.descriptorCount = 1;
@@ -1352,6 +1365,24 @@ namespace rn {
                                             &mLightsDescriptorSetLayout),
                 "Failed to create the descriptor set layouts for lights");
         mRendererContext.lightsLayout = mLightsDescriptorSetLayout;
+
+        // Create the point light for the descriptor set layout;
+        VkDescriptorSetLayoutBinding pointLightBinding{};
+        pointLightBinding.binding = 0;
+        pointLightBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pointLightBinding.descriptorCount = 1;
+        pointLightBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pointLightBinding.pImmutableSamplers = nullptr;
+
+        List<VkDescriptorSetLayoutBinding> pointLightBindings{pointLightBinding};
+        VkDescriptorSetLayoutCreateInfo pointLightLayoutCreateInfo{};
+        pointLightLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pointLightLayoutCreateInfo.bindingCount = pointLightBindings.size();
+        pointLightLayoutCreateInfo.pBindings = pointLightBindings.data();
+        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mDevices.logicalDevice, &pointLightLayoutCreateInfo,
+                                                              nullptr, &mPointLightDescriptorSetLayout),
+                                  "Failed to create the point light descriptor set layout");
+        mRendererContext.pointLightLayout = mPointLightDescriptorSetLayout;
 
         // Creating the Shadow Descriptor Layout
         VkDescriptorSetLayoutBinding shadowLayoutBinding{};
@@ -1413,13 +1444,13 @@ namespace rn {
         mRendererContext.samplerDescriptorPool = mSamplerDescriptorPool;
         // Creating the descriptor pool for the lights;
         VkDescriptorPoolSize lightsPoolSize{};
-        lightsPoolSize.descriptorCount = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        lightsPoolSize.descriptorCount = static_cast<std::uint32_t>(mSwapChainImageViews.size()); // for directional lights and the point lights
         lightsPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
         List<VkDescriptorPoolSize> lightsDescriptorPoolSizes{lightsPoolSize};
         VkDescriptorPoolCreateInfo lightsPoolCreateInfo{};
         lightsPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        lightsPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size()) * 2;
+        lightsPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
         lightsPoolCreateInfo.poolSizeCount = lightsDescriptorPoolSizes.size();
         lightsPoolCreateInfo.pPoolSizes = lightsDescriptorPoolSizes.data();
 
@@ -1429,6 +1460,22 @@ namespace rn {
                 "Failed to create the descriptor pool for lights");
 
         mRendererContext.lightsDescriptorPool = mLightDescriptorPool;
+        // Creating the descriptor Pool for the point lights.
+        VkDescriptorPoolSize pointLightPoolSize{};
+        pointLightPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pointLightPoolSize.descriptorCount = mSwapChainImages.size();
+
+        List<VkDescriptorPoolSize> pointLightPoolSizes{pointLightPoolSize};
+        VkDescriptorPoolCreateInfo pointLightPoolCreateInfo{};
+        pointLightPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pointLightPoolCreateInfo.maxSets = static_cast<std::uint32_t>(mSwapChainImageViews.size());
+        pointLightPoolCreateInfo.poolSizeCount = pointLightPoolSizes.size();
+        pointLightPoolCreateInfo.pPoolSizes = pointLightPoolSizes.data();
+
+        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &pointLightPoolCreateInfo, nullptr,
+                                                         &mPointLightDescriptorPool),
+                                  "Failed to create the descriptor pool for the point lights");
+        mRendererContext.pointLightDescriptorPool = mPointLightDescriptorPool;
 
         // Create the Descriptor Pool For the Shadow Mapping;
         VkDescriptorPoolSize shadowSamplerPoolSize{};

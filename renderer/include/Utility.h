@@ -19,6 +19,7 @@ namespace rn {
     using List = std::vector<T>;
     template<typename T, typename R, typename S>
     using Map = std::unordered_map<T, R, S>;
+    const std::uint32_t MAX_POINT_LIGHTS = 10;
 
     enum class AXIS {
         NONE = 0,
@@ -58,7 +59,16 @@ namespace rn {
         glm::vec4 color;
         glm::vec4 intensities;
     };
-
+    struct alignas(16) PointLightInfo {
+        glm::vec4 position;
+        glm::vec4 color;
+        glm::vec4 intensities;
+    };
+    struct PointLightUBO {
+        PointLightInfo infos[MAX_POINT_LIGHTS];
+        alignas(16) int totalLightCount = 0;
+        alignas(16) glm::ivec3 _padding;
+    };
     struct RendererEvent {
         enum class Type {
             WINDOW_RESIZE,
@@ -90,6 +100,8 @@ namespace rn {
         VkDescriptorSetLayout lightsLayout;
         VkDescriptorPool lightsDescriptorPool;
         VkDescriptorSet shadowDescriptorSet;
+        VkDescriptorSetLayout pointLightLayout;
+        VkDescriptorPool pointLightDescriptorPool;
 
         VkSwapchainKHR swapchain;
         VkFormat swapChainFormat;

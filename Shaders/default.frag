@@ -22,6 +22,18 @@ layout (set = 2, binding = 0) uniform OmniDirectionalInfo {
 
 layout (set = 3, binding = 0) uniform sampler2D shadowSampler;
 
+struct PointLights {
+    vec4 position;
+    vec4 color;
+    vec4 intensities;
+};
+const int MAX_POINT_LIGHT_COUNT = 10;
+layout (set = 4, binding = 0) uniform PointLightInfo {
+    PointLights lights[MAX_POINT_LIGHT_COUNT];
+    int lightCount;
+    ivec3 _padding;
+} pointLightInfo;
+
 float CalShadowFactor() {
     vec4 lightSpace = lightInfo.projection * lightInfo.view * vec4(vWorldPos, 1.0);
     vec3 proj = lightSpace.xyz / lightSpace.w;
@@ -33,6 +45,9 @@ float CalShadowFactor() {
 
     return current - bias > shadowDepth ? 0 : 1;
 }
+vec4 CalculatePointLights() {
+    return pointLightInfo.lights[0].color;
+}
 vec4 CalculatePongLights() {
     vec4 ambientLight = lightInfo.intensities.x * lightInfo.color;
 
@@ -43,6 +58,6 @@ vec4 CalculatePongLights() {
     return (ambientLight + diffuseLight);
 }
 void main() {
-    color = texture(defaultSampler, textureCoords) * CalculatePongLights();
+    color = texture(defaultSampler, textureCoords) * CalculatePongLights() * CalculatePointLights();
     id = vPickId;
 }
