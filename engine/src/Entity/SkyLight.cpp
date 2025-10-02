@@ -10,14 +10,15 @@
 #include "Entity/Scene.h"
 
 namespace vk {
-    SkyLight::SkyLight(Scene *scene, std::uint32_t pickId, std::string id,
+    SkyLight::SkyLight(Scene *scene, std::uint32_t pickId, const std::string &id,
                        const rn::OmniDirectionalInfo &directionalInfo) : GameObject(
-            scene, pickId), m_id(std::move(id)), mDirectionalLightInfo{directionalInfo} {
+            scene, pickId, id), mDirectionalLightInfo{directionalInfo} {
 
     }
 
     void SkyLight::BeginPlay() {
-        mDirectionalLight = new rn::OmniDirectionalLight(m_id, GameObject::GetScene()->GetRendererContext(),
+        mDirectionalLight = new rn::OmniDirectionalLight(GameObject::mStringId,
+                                                         GameObject::GetScene()->GetRendererContext(),
                                                          mDirectionalLightInfo);
         GameObject::GetScene()->GetRendererContext()->SetUpAsDirectionalLight(mDirectionalLight);
         GameObject::BeginPlay();

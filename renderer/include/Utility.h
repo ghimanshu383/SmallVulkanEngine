@@ -66,7 +66,7 @@ namespace rn {
     };
     struct PointLightUBO {
         PointLightInfo infos[MAX_POINT_LIGHTS];
-        alignas(16) int totalLightCount = 0;
+        alignas(16) uint32_t totalLightCount = 0;
         alignas(16) glm::ivec3 _padding;
     };
     struct RendererEvent {
@@ -136,6 +136,11 @@ namespace rn {
         void (*SetGizmoType)(const GIZMO_TYPE &type);
 
         GIZMO_TYPE (*GetGizmoType)();
+
+        // Registered in the Point lights class constructor not in the graphics
+        std::uint32_t (*AddPointLight)(const PointLightInfo &info);
+
+        void (*UpdateLightInfoPosition)(const glm::vec4 &position, std::uint32_t lightId);
     };
 
 

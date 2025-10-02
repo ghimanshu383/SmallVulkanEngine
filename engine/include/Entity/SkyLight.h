@@ -13,10 +13,10 @@ namespace vk {
     class SkyLight : public GameObject {
     private:
         rn::OmniDirectionalLight *mDirectionalLight{nullptr};
-        std::string m_id;
         rn::OmniDirectionalInfo mDirectionalLightInfo;
     public:
-        explicit SkyLight(class Scene *, std::uint32_t pickId, std::string id, const rn::OmniDirectionalInfo &lightInfo);
+        explicit SkyLight(class Scene *, std::uint32_t pickId, const std::string &id,
+                          const rn::OmniDirectionalInfo &lightInfo);
 
         virtual void BeginPlay() override;
 

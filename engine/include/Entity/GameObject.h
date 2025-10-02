@@ -13,14 +13,17 @@ namespace vk {
     class Scene;
 
     class GameObject {
-    private:
+    protected:
         List<std::shared_ptr<Component>> mComponentList;
+        std::string mStringId;
         bool IsPendingDestroy;
         Scene *mScene;
         std::uint32_t mPickId;
+
         void SetUpGameObjectGui();
+
     public:
-        explicit GameObject(Scene *scene, std::uint32_t pickId);
+        explicit GameObject(Scene *scene, std::uint32_t pickId, std::string stringId);
 
         virtual void BeginPlay();
 

@@ -5,9 +5,14 @@
 #include "StaticMesh.h"
 
 namespace rn {
+    std::uint32_t PointLights::mCurrentLightSizeCount = 0;
+    struct PointLightUBO PointLights::mPointLightUBO{};
+
     PointLights::PointLights(rn::RendererContext *ctx) : mCtx{ctx} {
         CreatePointLightBuffers();
         BindPointLightDescriptors();
+        ctx->AddPointLight = &PointLights::AddPointLight;
+        ctx->UpdateLightInfoPosition = &PointLights::UpdateLightInfoPosition;
     }
 
     void PointLights::CreatePointLightBuffers() {
@@ -51,7 +56,6 @@ namespace rn {
             writeInfo.pBufferInfo = &bufferInfo;
 
             vkUpdateDescriptorSets(mCtx->logicalDevice, 1, &writeInfo, 0, nullptr);
-            mPointLightUBO.infos[0].color = {1, 0, 0, 1};
         }
     }
 
@@ -62,9 +66,17 @@ namespace rn {
         vkUnmapMemory(mCtx->logicalDevice, mPointLightsMemory[currentImageIndex]);
     }
 
-    void PointLights::AddPointLight(StaticMesh *mesh) {
-        mMeshList.push_back(mesh);
-        mPointLightUBO.totalLightCount = mMeshList.size();
+    std::uint32_t PointLights::AddPointLight(const PointLightInfo &info) {
+        // This will return the index for the light added not the size;
+        if (mCurrentLightSizeCount > MAX_POINT_LIGHTS) {
+            return -1;
+        }
+        uint32_t indexToAdd = mCurrentLightSizeCount;
+        mPointLightUBO.infos[indexToAdd] = info;
+        mCurrentLightSizeCount++;
+        mPointLightUBO.totalLightCount = mCurrentLightSizeCount;
+
+        return indexToAdd;
     }
 
     PointLights::~PointLights() {
@@ -72,5 +84,9 @@ namespace rn {
             vkDestroyBuffer(mCtx->logicalDevice, mPointLightsBuffer[i], nullptr);
             vkFreeMemory(mCtx->logicalDevice, mPointLightsMemory[i], nullptr);
         }
+    }
+
+    void PointLights::UpdateLightInfoPosition(const glm::vec4 &position, std::uint32_t lightId) {
+        mPointLightUBO.infos[lightId].position = position;
     }
 }

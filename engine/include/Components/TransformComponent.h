@@ -28,11 +28,6 @@ namespace vk {
 
         void setScale(glm::vec3 value);
 
-        const glm::mat4 &GetModelMatrix() const { return mModelMatrix; }
-
-        void SetModelMatrixTranslate(const glm::vec3 pos) {
-            mModelMatrix[3] = glm::vec4{pos, 1.0};
-        }
 
         bool SetUpGuiInspector();
 
@@ -40,19 +35,33 @@ namespace vk {
 
         void SetPosition(glm::vec3 position) {
             mPosition = position;
+            UpdateModelMatrix();
         }
 
         void SetScale(const glm::vec3 &scale) {
             mScale = scale;
+            UpdateModelMatrix();
         }
 
         void SetRotation(const glm::vec3 &rotation) {
             mRotations = rotation;
+            UpdateModelMatrix();
+        }
+
+        const glm::mat4 &GetModelMatrix() {
+            UpdateModelMatrix();
+            return mModelMatrix;
+        }
+
+        void SetModelMatrixTranslate(const glm::vec3 pos) {
+            mModelMatrix[3] = glm::vec4{pos, 1.0};
         }
 
         const glm::vec3 &GetScale() const { return mScale; }
 
         const glm::vec3 &GetRotation() const { return mRotations; }
+
+        const glm::vec3 &GetPosition() const { return mPosition; }
 
     };
 }

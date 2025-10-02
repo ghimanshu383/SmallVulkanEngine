@@ -2,13 +2,18 @@
 // Created by ghima on 30-08-2025.
 //
 #include <Core/ImguiEditor.h>
+
+#include <utility>
 #include "Entity/GameObject.h"
 #include "Components/TransformComponent.h"
 #include "Entity/Scene.h"
 
 namespace vk {
-    GameObject::GameObject(vk::Scene *scene, std::uint32_t pickId) : mScene{scene}, IsPendingDestroy{false},
-                                                                     mPickId{pickId} {
+    GameObject::GameObject(vk::Scene *scene, std::uint32_t pickId, std::string stringId) : mScene{scene},
+                                                                                                  IsPendingDestroy{
+                                                                                                          false},
+                                                                                                  mPickId{pickId},
+                                                                                                  mStringId(std::move(stringId)) {
 
     }
 

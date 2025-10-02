@@ -85,7 +85,6 @@ namespace vk {
                                 ctx->GetViewProjectionMatrix()->projection
                         );
                         transformComponent->SetPosition(newPos);
-                        transformComponent->UpdateModelMatrix();
                     } else if (ctx->GetGizmoType() == rn::GIZMO_TYPE::SCALE) {
                         glm::vec3 newScale = gizmoDragController.UpdateScale(
                                 ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
@@ -96,7 +95,6 @@ namespace vk {
                                 ctx->GetViewProjectionMatrix()->projection
                         );
                         transformComponent->SetScale(newScale);
-                        transformComponent->UpdateModelMatrix();
                     } else if (ctx->GetGizmoType() == rn::GIZMO_TYPE::ROTATE) {
                         glm::vec3 newRotation = gizmoDragController.UpdateRotation(
                                 ImguiEditor::GetInstance(ctx)->GetLocalMousePos().x,
@@ -107,7 +105,6 @@ namespace vk {
                                 ctx->GetViewProjectionMatrix()->projection
                         );
                         transformComponent->SetRotation(newRotation);
-                        transformComponent->UpdateModelMatrix();
                     }
                 }
                 if (mouseReleased) {

@@ -30,6 +30,8 @@ add_executable(${ENGINE}
         include/Core/Logger.h
         src/Core/Logger.cpp
         include/Core/GizmoController.h
+        include/Entity/PointLight.h
+        src/Entity/PointLight.cpp
 )
 
 target_include_directories(${ENGINE} PUBLIC

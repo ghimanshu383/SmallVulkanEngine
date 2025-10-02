@@ -3,6 +3,7 @@
 //
 
 #include <Core/ImguiEditor.h>
+#include <Entity/PointLight.h>
 #include "Core/MainWindow.h"
 #include "Utility.h"
 #include "Components/MeshComponent.h"
@@ -136,7 +137,7 @@ namespace vk {
                 // Bottom face
                 4, 5, 1, 4, 1, 0
         };
-        std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>();
+        std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>("Test Object");
 
         std::string meshName = "Triangle Mesh";
 
@@ -150,7 +151,7 @@ namespace vk {
         tranComp->setScale({2, 2, 2});
 
 
-        std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>();
+        std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>("Plane Object");
         plane->SpawnComponent<MeshComponent>("Plane", vertOne, indices, "", true);
         std::shared_ptr<TransformComponent> planTran = plane->SpawnComponent<TransformComponent>(
                 "PlaneTransformComponent");
@@ -183,9 +184,17 @@ namespace vk {
                 "Sky Light transform Component");
         transformComponent->setTranslate(skyLight->GetLightInfo().position);
         transformComponent->setScale({.3, .3, .3});
+
+        // Setting up the point lights;
+        rn::PointLightInfo pointLightInfo{{0, 1, -5, 1},
+                                          {1, 1, 0,  1},
+                                          {1, .6, 1,  1}};
+        std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light No One",
+                                                                                          pointLightInfo);
+
+
         mDefaultScene->BeginPlay();
 
-        testMap = skyLight->GetDirectionalLight()->GetShadowMap();
         Logger::GetInstance()->WriteLog({LogType::WARN, "The Scene is now set and Render is starting"});
     }
 }

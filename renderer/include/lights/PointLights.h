@@ -10,13 +10,13 @@
 namespace rn {
     class PointLights {
     private :
-        std::uint32_t mCurrentLightSizeCount = 0;
-        struct PointLightUBO mPointLightUBO{};
+        static std::uint32_t mCurrentLightSizeCount;
+        static struct PointLightUBO mPointLightUBO;
         RendererContext *mCtx;
         List<VkBuffer> mPointLightsBuffer{};
         List<VkDeviceMemory> mPointLightsMemory{};
         List<VkDescriptorSet> mPointLightDescriptorSets{};
-        List<class StaticMesh *> mMeshList{};
+
     public:
         explicit PointLights(RendererContext *ctx);
 
@@ -28,7 +28,9 @@ namespace rn {
 
         void UpdatePointLightBuffers(size_t currentImageIndex);
 
-        void AddPointLight(class StaticMesh *mesh);
+        static std::uint32_t AddPointLight(const PointLightInfo &info);
+
+        static void UpdateLightInfoPosition(const glm::vec4 &position, std::uint32_t lightId);
 
         const VkDescriptorSet &GetDescriptorSet(size_t currentImageIndex) {
             return mPointLightDescriptorSets[currentImageIndex];

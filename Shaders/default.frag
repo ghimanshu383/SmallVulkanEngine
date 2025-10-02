@@ -30,7 +30,7 @@ struct PointLights {
 const int MAX_POINT_LIGHT_COUNT = 10;
 layout (set = 4, binding = 0) uniform PointLightInfo {
     PointLights lights[MAX_POINT_LIGHT_COUNT];
-    int lightCount;
+    uint lightCount;
     ivec3 _padding;
 } pointLightInfo;
 
@@ -46,9 +46,24 @@ float CalShadowFactor() {
     return current - bias > shadowDepth ? 0 : 1;
 }
 vec4 CalculatePointLights() {
-    return pointLightInfo.lights[0].color;
+    vec4 totalPointLightColor = vec4(0, 0, 0, 1);
+    for (int i = 0; i < pointLightInfo.lightCount; i++) {
+        vec3 direction = vWorldPos - pointLightInfo.lights[i].position.xyz;
+        float distance = length(direction);
+        direction = normalize(direction);
+        vec4 ambientLight = pointLightInfo.lights[i].intensities.x * pointLightInfo.lights[i].color;
+
+        float diffuseFactor = max(dot(normalize(vWorldPos), direction), 0.0);
+        vec4 diffuseLight = pointLightInfo.lights[i].intensities.y * pointLightInfo.lights[i].color * diffuseFactor;
+        vec4 pointColor = ambientLight + diffuseLight;
+
+        float attenuation = 2 * distance * distance + 2 * distance + 2;
+        totalPointLightColor += pointColor / attenuation;
+    }
+    return totalPointLightColor;
 }
 vec4 CalculatePongLights() {
+
     vec4 ambientLight = lightInfo.intensities.x * lightInfo.color;
 
     vec3 lightDir = normalize(lightInfo.position.xyz - vWorldPos);
@@ -58,6 +73,6 @@ vec4 CalculatePongLights() {
     return (ambientLight + diffuseLight);
 }
 void main() {
-    color = texture(defaultSampler, textureCoords) * CalculatePongLights() * CalculatePointLights();
+    color = texture(defaultSampler, textureCoords) * (CalculatePongLights() + CalculatePointLights());
     id = vPickId;
 }
