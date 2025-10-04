@@ -118,7 +118,7 @@ namespace rn {
         mGizmos = new Gizmos(&mRendererContext);
         // Setting up the context for the point lights;
         mPointLights = new PointLights{&mRendererContext};
-
+        mRendererContext.pointLight = mPointLights;
     }
 
     Graphics::~Graphics() {
@@ -834,7 +834,7 @@ namespace rn {
         rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
         rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE;
-        rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;;
         rasterizationStateCreateInfo.lineWidth = 1.0f;
 
         VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{};
@@ -870,7 +870,7 @@ namespace rn {
         mRendererContext.viewProjectionLayout = mViewProjectionDescriptorSetLayout;
         List<VkDescriptorSetLayout> setLayouts{mViewProjectionDescriptorSetLayout, mSamplerDescriptorLayout,
                                                mLightsDescriptorSetLayout, mShadowLayout,
-                                               mPointLightDescriptorSetLayout};
+                                               mPointLightDescriptorSetLayout, mPointLightShadowLayout};
 
         VkPushConstantRange pushConstantRange{};
         pushConstantRange.offset = 0;
@@ -1140,6 +1140,7 @@ namespace rn {
             mDirectionalLight->GetShadowMap()->BeginShadowFrame();
             mDirectionalLight->GetShadowMap()->EndShadowFrame();
         }
+        mPointLights->RenderPointLightShadowScene();
         Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
             List<VkDescriptorSet> descriptorSets{};
@@ -1179,6 +1180,7 @@ namespace rn {
                 descriptorSets.push_back(mShadowDescriptorSet);
             }
             descriptorSets.push_back(mPointLights->GetDescriptorSet(mCurrentImageIndex));
+            descriptorSets.push_back(mPointLights->GetShadowDescriptorSet(mCurrentImageIndex));
             vkCmdPushConstants(mCommandBuffer, mPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
                                &iter->second->GetModelMatrix());
             vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0,
@@ -1218,6 +1220,8 @@ namespace rn {
             waitSemaphores.push_back(mDirectionalLight->GetShadowMap()->GetShadowMapSemaphore());
             waitStageFlags.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         }
+        waitSemaphores.push_back(mPointLights->GetShadowMapSemaphore());
+        waitStageFlags.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         commandSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         commandSubmitInfo.commandBufferCount = 1;
@@ -1374,6 +1378,7 @@ namespace rn {
         pointLightBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         pointLightBinding.pImmutableSamplers = nullptr;
 
+
         List<VkDescriptorSetLayoutBinding> pointLightBindings{pointLightBinding};
         VkDescriptorSetLayoutCreateInfo pointLightLayoutCreateInfo{};
         pointLightLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1402,6 +1407,24 @@ namespace rn {
                 vkCreateDescriptorSetLayout(mDevices.logicalDevice, &shadowLayoutCreateInfo, nullptr,
                                             &mShadowLayout),
                 "Failed to create the Shadow layout ");
+
+        VkDescriptorSetLayoutBinding PointLightShadowBinding{};
+        PointLightShadowBinding.binding = 0;
+        PointLightShadowBinding.descriptorCount = MAX_POINT_LIGHTS;
+        PointLightShadowBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        PointLightShadowBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        PointLightShadowBinding.pImmutableSamplers = nullptr;
+
+        VkDescriptorSetLayoutCreateInfo pointLightShadowLayout{};
+        pointLightShadowLayout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pointLightShadowLayout.bindingCount = 1;
+        pointLightShadowLayout.pBindings = &PointLightShadowBinding;
+        pointLightShadowLayout.flags = 0;
+
+        Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mDevices.logicalDevice, &pointLightShadowLayout, nullptr,
+                                                              &mPointLightShadowLayout),
+                                  "Failed to create the layout for the point light shadows");
+        mRendererContext.pointLightShadowLayout = mPointLightShadowLayout;
     }
 
     void Graphics::CreateDescriptorPool() {
@@ -1465,6 +1488,7 @@ namespace rn {
         pointLightPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         pointLightPoolSize.descriptorCount = mSwapChainImages.size();
 
+
         List<VkDescriptorPoolSize> pointLightPoolSizes{pointLightPoolSize};
         VkDescriptorPoolCreateInfo pointLightPoolCreateInfo{};
         pointLightPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1493,6 +1517,24 @@ namespace rn {
                 vkCreateDescriptorPool(mDevices.logicalDevice, &shadowSamplerPoolCreateInfo, nullptr,
                                        &mShadowDescriptorPool),
                 "Failed to create the descriptor pool for shadows");
+
+        // Creating the descriptor Pool for the point light shadows;
+        VkDescriptorPoolSize pointLightDescriptorPoolSize{};
+        pointLightDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pointLightDescriptorPoolSize.descriptorCount = mSwapChainImageViews.size() * MAX_POINT_LIGHTS;
+
+        List<VkDescriptorPoolSize> pointLightDescPoolSizes{pointLightDescriptorPoolSize};
+        VkDescriptorPoolCreateInfo pointLightDescPoolCreateInfo{};
+        pointLightDescPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pointLightDescPoolCreateInfo.maxSets = mSwapChainImageViews.size();
+        pointLightDescPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pointLightDescPoolCreateInfo.poolSizeCount = pointLightDescPoolSizes.size();
+        pointLightDescPoolCreateInfo.pPoolSizes = pointLightDescPoolSizes.data();
+
+        Utility::CheckVulkanError(vkCreateDescriptorPool(mDevices.logicalDevice, &pointLightDescPoolCreateInfo, nullptr,
+                                                         &mPointShadowDescriptorPool),
+                                  "Failed to create the descriptor pool for the point lights");
+        mRendererContext.pointLightShadowPool = mPointShadowDescriptorPool;
     }
 
     void Graphics::AllocateDescriptorSets() {

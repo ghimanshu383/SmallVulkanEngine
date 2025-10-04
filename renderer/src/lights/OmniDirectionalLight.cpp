@@ -2,6 +2,7 @@
 // Created by ghima on 10-09-2025.
 //
 #define GLM_ENABLE_EXPERIMENTAL
+
 #include <glm/gtx/string_cast.hpp>
 #include "lights/OmniDirectionalLight.h"
 #include "lights/ShadowMap.h"
@@ -102,7 +103,7 @@ namespace rn {
 //                                                 .1f, 100.f);
         mLightInfo.projection[1][1] *= -1;
         glm::vec3 lightPos = glm::vec3(mLightInfo.position);
-        mLightInfo.view = glm::lookAt(lightPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+        mLightInfo.view = glm::lookAt(lightPos, glm::vec3(0, 0, 0), glm::vec3(0, -1, 0));
 
         mViewProjection.projection = mLightInfo.projection;
         mViewProjection.view = mLightInfo.view;

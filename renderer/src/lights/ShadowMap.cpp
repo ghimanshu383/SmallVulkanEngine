@@ -112,8 +112,8 @@ namespace rn {
         rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
         rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE; // MUST be false for depth writes
         rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE; // disable culling while debugging
-        rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // match your mesh winding or set NONE above
+        rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE;
+        rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizationStateCreateInfo.lineWidth = 1.0f;
         rasterizationStateCreateInfo.depthBiasEnable = VK_TRUE;
         rasterizationStateCreateInfo.depthBiasConstantFactor = 1.25f;

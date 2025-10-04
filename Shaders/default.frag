@@ -34,6 +34,8 @@ layout (set = 4, binding = 0) uniform PointLightInfo {
     ivec3 _padding;
 } pointLightInfo;
 
+layout (set = 5, binding = 0) uniform samplerCube pointLightShadowMaps[MAX_POINT_LIGHT_COUNT];
+
 float CalShadowFactor() {
     vec4 lightSpace = lightInfo.projection * lightInfo.view * vec4(vWorldPos, 1.0);
     vec3 proj = lightSpace.xyz / lightSpace.w;
@@ -44,6 +46,16 @@ float CalShadowFactor() {
     float diff = current - shadowDepth;
 
     return current - bias > shadowDepth ? 0 : 1;
+}
+
+float CalcPointLightShadowFactor(int lightIndex, vec3 fragPos) {
+    vec3 fragToLight = fragPos - pointLightInfo.lights[lightIndex].position.xyz;
+    float current = length(fragToLight) / 100;
+
+    float closest = texture(pointLightShadowMaps[lightIndex], fragToLight).r;
+
+    float bias = 0.005;
+    return (current - bias > closest) ? 0.0 : 1.0;
 }
 vec4 CalculatePointLights() {
     vec4 totalPointLightColor = vec4(0, 0, 0, 1);
@@ -57,8 +69,9 @@ vec4 CalculatePointLights() {
         vec4 diffuseLight = pointLightInfo.lights[i].intensities.y * pointLightInfo.lights[i].color * diffuseFactor;
         vec4 pointColor = ambientLight + diffuseLight;
 
-        float attenuation = 2 * distance * distance + 2 * distance + 2;
-        totalPointLightColor += pointColor / attenuation;
+        float shadowFactor = CalcPointLightShadowFactor(i, vWorldPos);
+        float attenuation = 1 / (2 * distance * distance + 2 * distance + 2);
+        totalPointLightColor += pointColor * attenuation * shadowFactor;
     }
     return totalPointLightColor;
 }
@@ -74,5 +87,6 @@ vec4 CalculatePongLights() {
 }
 void main() {
     color = texture(defaultSampler, textureCoords) * (CalculatePongLights() + CalculatePointLights());
+
     id = vPickId;
 }

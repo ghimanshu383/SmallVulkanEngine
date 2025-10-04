@@ -38,6 +38,8 @@ add_library(${RENDERER} STATIC
         src/Gizmos.cpp
         include/lights/PointLights.h
         src/lights/PointLights.cpp
+        include/lights/PointLightShadowMap.h
+        src/lights/PointLightShadowMap.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

@@ -20,8 +20,8 @@ namespace rn {
             Vertex &vertTwo = mVertList[mIndicesList[i + 1]];
             Vertex &vertThree = mVertList[mIndicesList[i + 2]];
 
-            glm::vec3 normalVecOne = {verOne.pos - vertTwo.pos};
-            glm::vec3 normalVecTwo = {verOne.pos - vertThree.pos};
+            glm::vec3 normalVecOne = {vertTwo.pos - verOne.pos };
+            glm::vec3 normalVecTwo = {vertThree.pos - verOne.pos };
             glm::vec3 normal = glm::normalize(glm::cross(normalVecOne, normalVecTwo));
 
             verOne.normals += normal;
