@@ -20,6 +20,7 @@ namespace rn {
     template<typename T, typename R, typename S>
     using Map = std::unordered_map<T, R, S>;
     const std::uint32_t MAX_POINT_LIGHTS = 10;
+    const std::uint32_t SHADOW_MAP_SIZE = 1024;
 
     enum class AXIS {
         NONE = 0,
@@ -69,6 +70,15 @@ namespace rn {
         alignas(16) uint32_t totalLightCount = 0;
         alignas(16) glm::ivec3 _padding;
     };
+    struct PointLightViewProjection {
+        alignas(16) glm::mat4 projection;
+        alignas(16) glm::mat4 view[6];
+    };
+    struct LightData {
+        alignas(16) glm::vec4 position;
+        float farPlane;
+        float _padding[3];
+    };
     struct RendererEvent {
         enum class Type {
             WINDOW_RESIZE,
@@ -101,7 +111,10 @@ namespace rn {
         VkDescriptorPool lightsDescriptorPool;
         VkDescriptorSet shadowDescriptorSet;
         VkDescriptorSetLayout pointLightLayout;
+        VkDescriptorSetLayout pointLightShadowLayout;
         VkDescriptorPool pointLightDescriptorPool;
+        VkDescriptorPool pointLightShadowPool;
+        class PointLights* pointLight;
 
         VkSwapchainKHR swapchain;
         VkFormat swapChainFormat;
@@ -141,6 +154,7 @@ namespace rn {
         std::uint32_t (*AddPointLight)(const PointLightInfo &info);
 
         void (*UpdateLightInfoPosition)(const glm::vec4 &position, std::uint32_t lightId);
+
     };
 
 
@@ -198,10 +212,11 @@ namespace rn {
                     VkFormat format,
                     VkImageTiling imageTiling,
                     unsigned int imageUsageFlags, unsigned int memoryPropertyFlags,
-                    VkDeviceMemory &memory);
+                    VkDeviceMemory &memory, int layers = 1, int flags = 0);
 
         static void CreateImageView(VkDevice logicalDevice, VkImage &image, VkFormat format, VkImageView &imageView,
-                                    unsigned int imageAspect);
+                                    unsigned int imageAspect, int baseArrayLayer = 0, int layerCount = 1,
+                                    VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D);
 
         static VkShaderModule CreateShaderModule(VkDevice logicalDevice, const char *filePath);
     };

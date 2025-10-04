@@ -119,6 +119,9 @@ namespace rn {
         VkDescriptorSetLayout mShadowLayout{};
         VkDescriptorSet mShadowDescriptorSet{};
         VkDescriptorPool mShadowDescriptorPool{};
+        VkDescriptorSetLayout mPointLightShadowLayout{};
+        VkDescriptorPool mPointShadowDescriptorPool{};
+
 #pragma endregion
 #pragma region OFF_SCREEN
         VkRenderPass mOffScreenRenderPass{};

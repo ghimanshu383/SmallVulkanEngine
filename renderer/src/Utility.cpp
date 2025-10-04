@@ -114,7 +114,7 @@ namespace rn {
                                  VkFormat format,
                                  VkImageTiling imageTiling,
                                  VkImageUsageFlags imageUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags,
-                                 VkDeviceMemory &memory) {
+                                 VkDeviceMemory &memory, int layers, int flags) {
         VkImageCreateInfo depthImageCreateInfo{};
         depthImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         depthImageCreateInfo.format = format;
@@ -123,12 +123,13 @@ namespace rn {
         depthImageCreateInfo.tiling = imageTiling;
         depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depthImageCreateInfo.extent.depth = 1;
-        depthImageCreateInfo.arrayLayers = 1;
+        depthImageCreateInfo.arrayLayers = layers;
         depthImageCreateInfo.mipLevels = 1;
         depthImageCreateInfo.usage = imageUsageFlags;
         depthImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
         depthImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        depthImageCreateInfo.flags = flags;
 
         std::string imageCreationErrorMessage = "Failed to create the Image " + imageName;
         VkImage image{};
@@ -156,21 +157,22 @@ namespace rn {
 
     void
     Utility::CreateImageView(VkDevice logicalDevice, VkImage &image, VkFormat format, VkImageView &imageView,
-                             VkImageAspectFlags imageAspect) {
+                             VkImageAspectFlags imageAspect, int baseArrayLayer, int layerCount,
+                             VkImageViewType viewType) {
         VkImageViewCreateInfo imageViewCreateInfo{};
         imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         imageViewCreateInfo.format = format;
         imageViewCreateInfo.image = image;
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.viewType = viewType;
         imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
         imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
         imageViewCreateInfo.subresourceRange.aspectMask = imageAspect;
         imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-        imageViewCreateInfo.subresourceRange.layerCount = 1;
+        imageViewCreateInfo.subresourceRange.layerCount = layerCount;
         imageViewCreateInfo.subresourceRange.levelCount = 1;
-        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = baseArrayLayer;
 
         Utility::CheckVulkanError(vkCreateImageView(logicalDevice, &imageViewCreateInfo, nullptr, &imageView),
                                   "Failed to create the image View");

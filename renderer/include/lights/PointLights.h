@@ -12,19 +12,29 @@ namespace rn {
     private :
         static std::uint32_t mCurrentLightSizeCount;
         static struct PointLightUBO mPointLightUBO;
-        RendererContext *mCtx;
+        static RendererContext *mCtx;
         List<VkBuffer> mPointLightsBuffer{};
         List<VkDeviceMemory> mPointLightsMemory{};
         List<VkDescriptorSet> mPointLightDescriptorSets{};
+        static List<VkDescriptorSet> mPointLightShadowDescriptorSets;
+        static List<class PointLightShadowMap *> mPointLightShadowMaps;
+        VkSemaphore mPointLightShadowMapSemaphore;
+        static VkFence renderShadowSceneFence;
+        static VkCommandBuffer mShadowCommandBuffer;
+
+        void CreatePointLightBuffers();
+
+        void BindPointLightDescriptors();
+
+        static void BindPointLightShadowDescriptors();
+
+        void CreateShadowMapSemaphoreAndAllocateCommandbuffer();
 
     public:
         explicit PointLights(RendererContext *ctx);
 
         ~PointLights();
 
-        void CreatePointLightBuffers();
-
-        void BindPointLightDescriptors();
 
         void UpdatePointLightBuffers(size_t currentImageIndex);
 
@@ -32,8 +42,16 @@ namespace rn {
 
         static void UpdateLightInfoPosition(const glm::vec4 &position, std::uint32_t lightId);
 
+        void RenderPointLightShadowScene();
+
+        const VkSemaphore &GetShadowMapSemaphore() const { return mPointLightShadowMapSemaphore; }
+
         const VkDescriptorSet &GetDescriptorSet(size_t currentImageIndex) {
             return mPointLightDescriptorSets[currentImageIndex];
+        }
+
+        const VkDescriptorSet &GetShadowDescriptorSet(size_t currentImageIndex) {
+            return mPointLightShadowDescriptorSets[currentImageIndex];
         }
     };
 }

@@ -16,7 +16,7 @@ namespace vk {
     }
 
     void Camera::Init() {
-        mProjectionMatrix = glm::perspective(glm::radians(45.f),
+        mProjectionMatrix = glm::perspectiveRH_NO(glm::radians(45.f),
                                              (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
                                              0.1f, 100.f);
         mProjectionMatrix[1][1] *= -1;

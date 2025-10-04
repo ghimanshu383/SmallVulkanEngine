@@ -99,7 +99,7 @@ namespace vk {
         mCtx = mGraphics->GetRendererContext();
 
         mDefaultScene = new Scene{mCtx};
-        mDefaultCamera = new Camera{this, mCtx, glm::vec3{0, 1, -6}, .005f, .1f, 90.f, 0.f};
+        mDefaultCamera = new Camera{this, mCtx, glm::vec3{0, 1, 1}, .005f, .1f, -90.f, 0.f};
         mDefaultCamera->Init();
 
         List<rn::Vertex> vertOne = {{glm::vec3{-0.5, -1, 0}, {1, 0, 0, 1}, {0, 1}},
@@ -147,8 +147,9 @@ namespace vk {
         std::shared_ptr tranComp = testObject->SpawnComponent<TransformComponent>(meshName);
         testObject->SpawnComponent<ModelComponent>("Test Comp",
                                                    R"(D:\cProjects\SmallVkEngine\models\simpleModels\building-a.obj)");
-        tranComp->setTranslate({0, 0, -3});
+        tranComp->setTranslate({0, 0, -7});
         tranComp->setScale({2, 2, 2});
+        tranComp->setRotation({0, 180, 0});
 
 
         std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>("Plane Object");
@@ -160,17 +161,17 @@ namespace vk {
         planTran->setScale({10, 10, 10,});
 
 
-//        std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>();
-//        objectTwo->SpawnComponent<MeshComponent>("CubeMesh", cubeVertices, cubeIndices, "", true);
-//        std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
-//                "ObjectTwoTranComponent");
-//        objectTwoTran->setTranslate({0, .25, -2});
-//        objectTwoTran->setScale({.5, 0.5, .5});
+        std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>("Cube");
+        objectTwo->SpawnComponent<MeshComponent>("ObjectTwoMesh", cubeVertices, cubeIndices, "", true);
+        std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
+                "ObjectTwoTranComponent");
+        objectTwoTran->setTranslate({0, 1, -2});
+        objectTwoTran->setScale({.5, 0.5, .5});
 
 
         // Setting up the default Directional Light;
         rn::OmniDirectionalInfo skyLightInfo{};
-        skyLightInfo.position = {0, 3, -7, 1};
+        skyLightInfo.position = {0, 3, 1, 1};
         skyLightInfo.color = {1, 1, 1, 1};
         skyLightInfo.intensities = {.7, 1, 0, 0};
 
@@ -186,9 +187,9 @@ namespace vk {
         transformComponent->setScale({.3, .3, .3});
 
         // Setting up the point lights;
-        rn::PointLightInfo pointLightInfo{{0, 1, -5, 1},
-                                          {1, 1, 0,  1},
-                                          {1, .6, 1,  1}};
+        rn::PointLightInfo pointLightInfo{{1, 1,  -5, 1},
+                                          {1, 1,  0,  1},
+                                          {2, .7, 1,  1}};
         std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light No One",
                                                                                           pointLightInfo);
 
