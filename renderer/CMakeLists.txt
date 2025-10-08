@@ -40,6 +40,9 @@ add_library(${RENDERER} STATIC
         src/lights/PointLights.cpp
         include/lights/PointLightShadowMap.h
         src/lights/PointLightShadowMap.cpp
+        include/SkyBox.h
+        src/Skybox.cpp
+        include/stb_image_resize2.h
 )
 
 target_include_directories(${RENDERER} PUBLIC

@@ -103,7 +103,8 @@ namespace rn {
         std::uint8_t *imageData = stbi_load(fileName, &width, &height, &channel, STBI_rgb_alpha);
         if (imageData == nullptr) {
             LOG_WARN("Failed to load the texture Image From File... Setting the Default Texture Image");
-            // Write the Logic to load the default Texture;
+            std::exit(EXIT_FAILURE);
+            // TODO Write the Logic to load the default Texture;
         }
         imageSize = width * height * 4;
         return imageData;
@@ -114,14 +115,14 @@ namespace rn {
                                  VkFormat format,
                                  VkImageTiling imageTiling,
                                  VkImageUsageFlags imageUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags,
-                                 VkDeviceMemory &memory, int layers, int flags) {
+                                 VkDeviceMemory &memory, int layers, int flags, VkImageLayout initialLayout) {
         VkImageCreateInfo depthImageCreateInfo{};
         depthImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         depthImageCreateInfo.format = format;
         depthImageCreateInfo.extent.width = width;
         depthImageCreateInfo.extent.height = height;
         depthImageCreateInfo.tiling = imageTiling;
-        depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthImageCreateInfo.initialLayout = initialLayout;
         depthImageCreateInfo.extent.depth = 1;
         depthImageCreateInfo.arrayLayers = layers;
         depthImageCreateInfo.mipLevels = 1;
@@ -179,12 +180,13 @@ namespace rn {
     }
 
     void Utility::CopyBufferToImage(RendererContext &ctx, VkBuffer srcBuffer, VkImage dstImage, uint32_t width,
-                                    uint32_t height, VkImageAspectFlags aspectFlags) {
+                                    uint32_t height, VkImageAspectFlags aspectFlags, int arrayLayer) {
         VkCommandBuffer commandBuffer = BeginCommandBuffer(ctx);
         VkBufferImageCopy imageCopy{};
         imageCopy.imageExtent = {width, height, 1};
         imageCopy.imageSubresource.aspectMask = aspectFlags;
         imageCopy.imageSubresource.layerCount = 1;
+        imageCopy.imageSubresource.baseArrayLayer = arrayLayer;
         imageCopy.imageSubresource.mipLevel = 0;
         imageCopy.imageOffset = {0, 0};
         imageCopy.bufferRowLength = 0;
@@ -196,7 +198,8 @@ namespace rn {
     }
 
     void Utility::TransitionImageLayout(RendererContext ctx, VkImage image, VkImageLayout oldLayout,
-                                        VkImageLayout newLayout, VkImageAspectFlags aspectFlags) {
+                                        VkImageLayout newLayout, VkImageAspectFlags aspectFlags, int layerCount,
+                                        int baseLayer) {
         VkCommandBuffer commandBuffer = BeginCommandBuffer(ctx);
         VkImageMemoryBarrier imageMemoryBarrier{};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -206,9 +209,9 @@ namespace rn {
         imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         imageMemoryBarrier.subresourceRange.aspectMask = aspectFlags;
-        imageMemoryBarrier.subresourceRange.layerCount = 1;
-        imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
-        imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+        imageMemoryBarrier.subresourceRange.layerCount = layerCount,
+                imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
+        imageMemoryBarrier.subresourceRange.baseArrayLayer = baseLayer;
         imageMemoryBarrier.subresourceRange.levelCount = 1;
 
         VkPipelineStageFlags srcFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;

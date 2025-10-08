@@ -6,5 +6,7 @@ glslc D:\cProjects\SmallVkEngine\Shaders\gizmo.vert -o D:\cProjects\SmallVkEngin
 glslc D:\cProjects\SmallVkEngine\Shaders\gizmo.frag -o D:\cProjects\SmallVkEngine\Shaders\gizmo.frag.spv
 glslc D:\cProjects\SmallVkEngine\Shaders\cubeShadow.vert -o D:\cProjects\SmallVkEngine\Shaders\cubeShadow.ver.spv
 glslc D:\cProjects\SmallVkEngine\Shaders\cubeShadow.frag -o D:\cProjects\SmallVkEngine\Shaders\cubeShadow.frag.spv
+glslc D:\cProjects\SmallVkEngine\Shaders\Skybox.vert -o D:\cProjects\SmallVkEngine\Shaders\Skybox.ver.spv
+glslc D:\cProjects\SmallVkEngine\Shaders\Skybox.frag -o D:\cProjects\SmallVkEngine\Shaders\Skybox.frag.spv
 
 pause

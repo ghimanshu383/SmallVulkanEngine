@@ -153,6 +153,7 @@ namespace vk {
 
 
         std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>("Plane Object");
+        plane->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
         plane->SpawnComponent<MeshComponent>("Plane", vertOne, indices, "", true);
         std::shared_ptr<TransformComponent> planTran = plane->SpawnComponent<TransformComponent>(
                 "PlaneTransformComponent");
@@ -162,6 +163,7 @@ namespace vk {
 
 
         std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>("Cube");
+
         objectTwo->SpawnComponent<MeshComponent>("ObjectTwoMesh", cubeVertices, cubeIndices, "", true);
         std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
                 "ObjectTwoTranComponent");
@@ -190,12 +192,17 @@ namespace vk {
         rn::PointLightInfo pointLightInfo{{1, 1,  -5, 1},
                                           {1, 1,  0,  1},
                                           {2, .7, 1,  1}};
-        std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light No One",
-                                                                                          pointLightInfo);
+        std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light One",
+
+        pointLightInfo);
+        rn::PointLightInfo pointLightInfoTwo{{-1, 1,  -5, 1},
+                                          {1, 0,  1,  1},
+                                          {2, .7, 1,  1}};
+//        std::shared_ptr<PointLight> lightTwo = mDefaultScene->SpawnGameObject<PointLight>("Point Light Two",
+//                                                                                          pointLightInfoTwo);
 
 
         mDefaultScene->BeginPlay();
-
         Logger::GetInstance()->WriteLog({LogType::WARN, "The Scene is now set and Render is starting"});
     }
 }

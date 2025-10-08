@@ -16,7 +16,7 @@ namespace vk {
     }
 
     void Camera::Init() {
-        mProjectionMatrix = glm::perspectiveRH_NO(glm::radians(45.f),
+        mProjectionMatrix = glm::perspective(glm::radians(45.f),
                                              (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
                                              0.1f, 100.f);
         mProjectionMatrix[1][1] *= -1;
@@ -66,7 +66,7 @@ namespace vk {
     void Camera::Update() {
         mFront.x = glm::cos(glm::radians(mPitch)) * glm::cos(glm::radians(mYaw));
         mFront.y = glm::sin(glm::radians(mPitch));
-        mFront.z = glm::sin(glm::radians(mYaw) * glm::cos(glm::radians(mPitch)));
+        mFront.z = glm::cos(glm::radians(mPitch)) * glm::sin(glm::radians(mYaw));
         mFront = glm::normalize(mFront);
 
         mRight = glm::normalize(glm::cross(mFront, mWorldUp));

@@ -21,6 +21,7 @@ namespace rn {
     using Map = std::unordered_map<T, R, S>;
     const std::uint32_t MAX_POINT_LIGHTS = 10;
     const std::uint32_t SHADOW_MAP_SIZE = 1024;
+    const std::uint32_t SKY_BOX_RESOLUTION = 1024;
 
     enum class AXIS {
         NONE = 0,
@@ -84,7 +85,7 @@ namespace rn {
             WINDOW_RESIZE,
             VIEW_PORT_RESIZE,
             VIEW_PORT_CLICKED,
-            MOUSE_RELEASED
+            MOUSE_RELEASED,
         };
         Type type;
         uint32_t width;
@@ -101,6 +102,7 @@ namespace rn {
         VkCommandBuffer mainCommandBuffer;
         VkQueue graphicsQueue;
         VkQueue presentationQueue;
+        std::uint32_t graphicsQueueIndex;
         VkRenderPass offScreenRenderPass;
         VkDescriptorPool samplerDescriptorPool;
         VkDescriptorSetLayout samplerDescriptorSetLayout;
@@ -114,7 +116,8 @@ namespace rn {
         VkDescriptorSetLayout pointLightShadowLayout;
         VkDescriptorPool pointLightDescriptorPool;
         VkDescriptorPool pointLightShadowPool;
-        class PointLights* pointLight;
+
+        class PointLights *pointLight;
 
         VkSwapchainKHR swapchain;
         VkFormat swapChainFormat;
@@ -200,11 +203,11 @@ namespace rn {
 
         static void
         CopyBufferToImage(RendererContext &ctx, VkBuffer srcBuffer, VkImage dstImage, uint32_t width, uint32_t height,
-                          VkImageAspectFlags aspectFlags);
+                          VkImageAspectFlags aspectFlags, int baseArrayLayer = 0);
 
         static void
         TransitionImageLayout(RendererContext ctx, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
-                              VkImageAspectFlags aspectFlags);
+                              VkImageAspectFlags aspectFlags, int layerCount = 1, int baseLayer = 0);
 
         static VkImage
         CreateImage(std::string &&imageName, VkPhysicalDevice physicalDevice, VkDevice logicalDevice,
@@ -212,7 +215,8 @@ namespace rn {
                     VkFormat format,
                     VkImageTiling imageTiling,
                     unsigned int imageUsageFlags, unsigned int memoryPropertyFlags,
-                    VkDeviceMemory &memory, int layers = 1, int flags = 0);
+                    VkDeviceMemory &memory, int layers = 1, int flags = 0,
+                    VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED);
 
         static void CreateImageView(VkDevice logicalDevice, VkImage &image, VkFormat format, VkImageView &imageView,
                                     unsigned int imageAspect, int baseArrayLayer = 0, int layerCount = 1,

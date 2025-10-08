@@ -20,7 +20,15 @@ namespace rn {
         static List<class PointLightShadowMap *> mPointLightShadowMaps;
         VkSemaphore mPointLightShadowMapSemaphore;
         static VkFence renderShadowSceneFence;
-        static VkCommandBuffer mShadowCommandBuffer;
+        static List<VkCommandBuffer> mShadowCommandBuffer;
+        static List<std::thread> mShadowMapThreads;
+        std::mutex mutex_;
+        List<VkCommandPool> mThreadedCommandPools{};
+
+        static VkSampler mDummyShadowSampler;
+        static VkImageView mDummyShadowImageview;
+        VkImage mDummyShadowImage{};
+        VkDeviceMemory mDummyImageMemory{};
 
         void CreatePointLightBuffers();
 
@@ -29,6 +37,8 @@ namespace rn {
         static void BindPointLightShadowDescriptors();
 
         void CreateShadowMapSemaphoreAndAllocateCommandbuffer();
+
+        void CreateDummyShadowBindingContext();
 
     public:
         explicit PointLights(RendererContext *ctx);

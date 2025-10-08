@@ -20,6 +20,8 @@ namespace rn {
 
         static class Gizmos *mGizmos;
 
+        static class Skybox *mSkyBox;
+
         static AXIS activeGizmoAxis;
 
 #pragma endregion
@@ -43,6 +45,7 @@ namespace rn {
 
         VkQueue mGraphicsQueue{};
         VkQueue mPresentationQueue{};
+
 #pragma endregion
 #pragma region Surface_and_Swapchain
         VkSurfaceKHR mSurface{};
@@ -185,6 +188,7 @@ namespace rn {
             mRendererContext.logicalDevice = mDevices.logicalDevice;
             mRendererContext.commandPool = mCommandPool;
             mRendererContext.graphicsQueue = mGraphicsQueue;
+            mRendererContext.graphicsQueueIndex = mQueueFamily.graphicsQueueIndex.value();
             mRendererContext.presentationQueue = mPresentationQueue;
             mRendererContext.RegisterMesh = &RegisterMeshObject;
             mRendererContext.UpdateViewAndProjectionMatrix = &SetViewProjection;

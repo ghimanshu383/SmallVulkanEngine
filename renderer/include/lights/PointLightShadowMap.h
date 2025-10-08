@@ -13,11 +13,14 @@ namespace rn {
         RendererContext *mCtx;
         PointLightInfo mLightInfo{};
         PointLightViewProjection mViewProjection{};
-        LightData mLightData {};
+        LightData mLightData{};
         VkRenderPass mRenderPass{};
         VkPipelineLayout mPipelineLayout{};
         VkPipeline mPipeline{};
         VkImage mShadowImage{};
+        VkImage mShadowImageDepth;
+        VkDeviceMemory mShadowImageDepthMemory{};
+        VkImageView mShadowImageDepthView{};
         VkDeviceMemory mShadowImageMemory{};
         List<VkImageView> mShadowRendingImageViews{};
         List<VkDeviceMemory> mShadowRenderingImageViewsMemory{};
@@ -27,19 +30,17 @@ namespace rn {
         VkViewport mViewPort{};
         VkRect2D mScissors{};
         VkPushConstantRange mModelPushConstant;
-        VkCommandBuffer mCommandBuffer{};
         VkSampler mSampler;
 
 
         VkBuffer viewProjectionBuffer{};
         VkDeviceMemory viewProjectionMemory{};
         VkDescriptorSet viewProjectionDescriptorSet{};
-        VkDescriptorPool viewProjectionDescriptorPool{};
-        VkDescriptorSetLayout viewProjectionDescriptorSetLayout{};
+        VkDescriptorPool mDescriptorPool{};
+        VkDescriptorSetLayout mDescriptorSetLayout{};
 
         VkBuffer mLightDataBuffer{};
         VkDeviceMemory mLightDataMemory{};
-        VkDescriptorSet mLightDataDescriptorSet{};
 
         void CreateFrameBuffersImagesAndImageViews();
 
@@ -58,13 +59,15 @@ namespace rn {
         void ComputePointLightViewProjection();
 
     public:
-        explicit PointLightShadowMap(RendererContext *ctx, PointLightInfo lightInfo, VkCommandBuffer mCommandbuffer);
+        explicit PointLightShadowMap(RendererContext *ctx, PointLightInfo lightInfo);
 
-        void BeginPointShadowFrame();
+        ~PointLightShadowMap();
 
-        void EndFrame();
+        void BeginPointShadowFrame(VkCommandBuffer commandBuffer);
 
-        void ImageTransition();
+        void EndFrame(VkCommandBuffer commandBuffer);
+
+        void ImageTransition(VkCommandBuffer commandBuffer);
 
         // Getter;
         const VkSampler &GetSampler() const { return mSampler; };

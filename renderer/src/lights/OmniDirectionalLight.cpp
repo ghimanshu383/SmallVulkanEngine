@@ -96,7 +96,7 @@ namespace rn {
     }
 
     void OmniDirectionalLight::ComputeViewProjection() {
-        float orthoSize = 5.0f; // Adjust to cover your scene
+        float orthoSize = 10.0f; // Adjust to cover your scene
         mLightInfo.projection = glm::orthoZO(-orthoSize, orthoSize, -orthoSize, orthoSize, .1f, 20.f);
 //        mLightInfo.projection = glm::perspective(glm::radians(45.0f),
 //                                                 (float) mCtx->windowExtents.width / (float) mCtx->windowExtents.height,
