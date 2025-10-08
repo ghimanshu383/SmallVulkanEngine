@@ -49,12 +49,12 @@ float CalShadowFactor() {
 }
 
 float CalcPointLightShadowFactor(int lightIndex, vec3 fragPos) {
-    vec3 fragToLight = fragPos - pointLightInfo.lights[lightIndex].position.xyz;
-    float current = length(fragToLight) / 100;
+    vec3 fragToLight = pointLightInfo.lights[lightIndex].position.xyz - fragPos;
+    float current = length(fragToLight);
 
-    float closest = texture(pointLightShadowMaps[lightIndex], fragToLight).r;
+    float closest = texture(pointLightShadowMaps[lightIndex], normalize(fragToLight)).r * 100;
 
-    float bias = 0.005;
+    float bias = .005;
     return (current - bias > closest) ? 0.0 : 1.0;
 }
 vec4 CalculatePointLights() {
@@ -87,6 +87,5 @@ vec4 CalculatePongLights() {
 }
 void main() {
     color = texture(defaultSampler, textureCoords) * (CalculatePongLights() + CalculatePointLights());
-
     id = vPickId;
 }

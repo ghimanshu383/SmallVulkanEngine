@@ -11,6 +11,7 @@
 #include "lights/PointLights.h"
 #include "lights/ShadowMap.h"
 #include "Gizmos.h"
+#include "SkyBox.h"
 
 
 namespace rn {
@@ -28,6 +29,7 @@ namespace rn {
     bool Graphics::isViewPortClicked = false;
     AXIS Graphics::activeGizmoAxis = AXIS::NONE;
     Gizmos *Graphics::mGizmos = nullptr;
+    Skybox *Graphics::mSkyBox = nullptr;
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -59,16 +61,14 @@ namespace rn {
                         mMouseYPos = event.clickY;
                         isViewPortClicked = true;
                         // This can be consume if the click is on the gizmo
-                        //  vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
-                        vkDeviceWaitIdle(
-                                mDevices.logicalDevice);           // This is required for the drag to be in sync with fences it was not syncing
+                        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
                         mRendererContext.beginGizmoDrag = true;
                         break;
                     }
                     case RendererEvent::Type::MOUSE_RELEASED : {
-
                         mRendererContext.beginGizmoDrag = false;
                         activeGizmoAxis = AXIS::NONE;
+                        break;
                     }
                 }
                 mShouldRender.store(true, std::memory_order_release);
@@ -119,6 +119,8 @@ namespace rn {
         // Setting up the context for the point lights;
         mPointLights = new PointLights{&mRendererContext};
         mRendererContext.pointLight = mPointLights;
+        // Setting up the default Sky box;
+        mSkyBox = new Skybox{&mRendererContext};
     }
 
     Graphics::~Graphics() {
@@ -156,6 +158,8 @@ namespace rn {
         vkDestroyDescriptorPool(mDevices.logicalDevice, mShadowDescriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mPointLightDescriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(mDevices.logicalDevice, mPointLightDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(mDevices.logicalDevice, mPointLightShadowLayout, nullptr);
+        vkDestroyDescriptorPool(mDevices.logicalDevice, mPointShadowDescriptorPool, nullptr);
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -572,11 +576,6 @@ namespace rn {
         vkDestroySampler(mDevices.logicalDevice, mOffScreenImageSampler, nullptr);
         CreateOffScreenBindings();
         CreateMousePickingBuffers();
-//        mViewport = {(float) mWindowExtent.width, (float) mWindowExtent.height};
-//        mScissors = {0, 0, mWindowExtent};
-        if (mDirectionalLight != nullptr) {
-            mDirectionalLight->GetShadowMap()->ReCreateResourcesForWindowResize();
-        }
     }
 
     void Graphics::OnViewPortChange(uint32_t newWidth, uint32_t newHeight) {
@@ -833,7 +832,7 @@ namespace rn {
         rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
         rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
         rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE;
+        rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;;
         rasterizationStateCreateInfo.lineWidth = 1.0f;
 
@@ -1070,6 +1069,10 @@ namespace rn {
         renderPassBeginInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // Rendering the sky box // This has to be done before binding the main pipeline and rendering the scene else the scene will use the sky box pipeline
+        mSkyBox->RenderSkyBox();
+
         vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
 
         VkViewport viewport{};
@@ -1203,6 +1206,7 @@ namespace rn {
             mGizmos->SetModelMatrix(gizmoModelMatrix);
             mGizmos->DrawGizmos(mCurrentImageIndex);
         }
+
     }
 
     void Graphics::EndFrame() {
@@ -1852,6 +1856,7 @@ namespace rn {
 
     void Graphics::SetActiveClickObject() {
         uint32_t *data;
+        vkWaitForFences(mDevices.logicalDevice, 1, &mPresentFinishFence, VK_TRUE, UINT64_MAX);
         vkMapMemory(mDevices.logicalDevice, mMousePickingBufferMemory, 0, sizeof(uint32_t), 0, (void **) &data);
         activeGizmoAxis = AXIS::NONE;
         if (*data > 1000) {

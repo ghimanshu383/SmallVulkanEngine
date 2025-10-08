@@ -11,14 +11,19 @@ namespace rn {
     RendererContext *PointLights::mCtx = nullptr;
     List<class PointLightShadowMap *> PointLights::mPointLightShadowMaps = {};
     List<VkDescriptorSet> PointLights::mPointLightShadowDescriptorSets = {};
-    VkCommandBuffer PointLights::mShadowCommandBuffer = {};
+    List<VkCommandBuffer> PointLights::mShadowCommandBuffer = {};
     VkFence PointLights::renderShadowSceneFence = {};
+    VkSampler  PointLights::mDummyShadowSampler{};
+    VkImageView PointLights::mDummyShadowImageview{};
+    List<std::thread> PointLights::mShadowMapThreads{};
 
     PointLights::PointLights(rn::RendererContext *ctx) {
         if (ctx == nullptr) {
             LOG_ERROR("Failed to get the renderer context for the point lights");
             std::exit(EXIT_FAILURE);
         }
+        VkCommandBuffer commandBuffer{};
+        mShadowCommandBuffer = {MAX_POINT_LIGHTS, commandBuffer};
         mCtx = ctx;
         ctx->AddPointLight = &PointLights::AddPointLight;
         ctx->UpdateLightInfoPosition = &PointLights::UpdateLightInfoPosition;
@@ -26,7 +31,29 @@ namespace rn {
         CreatePointLightBuffers();
         BindPointLightDescriptors();
         CreateShadowMapSemaphoreAndAllocateCommandbuffer();
+        CreateDummyShadowBindingContext();
+        BindPointLightShadowDescriptors();
 
+    }
+
+    PointLights::~PointLights() {
+        for (int i = 0; i < mCtx->swapChainImageCount; i++) {
+            vkDestroyBuffer(mCtx->logicalDevice, mPointLightsBuffer[i], nullptr);
+            vkFreeMemory(mCtx->logicalDevice, mPointLightsMemory[i], nullptr);
+        }
+        vkDestroySampler(mCtx->logicalDevice, mDummyShadowSampler, nullptr);
+        vkDestroyImageView(mCtx->logicalDevice, mDummyShadowImageview, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mDummyShadowImage, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mDummyImageMemory, nullptr);
+
+        vkDestroyFence(mCtx->logicalDevice, renderShadowSceneFence, nullptr);
+        vkDestroySemaphore(mCtx->logicalDevice, mPointLightShadowMapSemaphore, nullptr);
+        for (const PointLightShadowMap *shadowMap: mPointLightShadowMaps) {
+            delete shadowMap;
+        }
+        for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+            vkDestroyCommandPool(mCtx->logicalDevice, mThreadedCommandPools[i], nullptr);
+        }
     }
 
     void PointLights::CreatePointLightBuffers() {
@@ -95,8 +122,8 @@ namespace rn {
 
             for (uint32_t j = mCurrentLightSizeCount; j < MAX_POINT_LIGHTS; j++) {
                 // just adding the image view for the first light as this function is called only if at least one light is there
-                imageInfos[j].sampler = mPointLightShadowMaps[0]->GetSampler();
-                imageInfos[j].imageView = mPointLightShadowMaps[0]->GetCubeImageView();
+                imageInfos[j].sampler = mDummyShadowSampler;
+                imageInfos[j].imageView = mDummyShadowImageview;
                 imageInfos[j].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             }
 
@@ -130,18 +157,11 @@ namespace rn {
         mCurrentLightSizeCount++;
         mPointLightUBO.totalLightCount = mCurrentLightSizeCount;
 
-        PointLightShadowMap *shadowMap = new PointLightShadowMap(mCtx, info, mShadowCommandBuffer);
+        PointLightShadowMap *shadowMap = new PointLightShadowMap(mCtx, info);
         mPointLightShadowMaps.push_back(shadowMap);
         BindPointLightShadowDescriptors();
 
         return indexToAdd;
-    }
-
-    PointLights::~PointLights() {
-        for (int i = 0; i < mCtx->swapChainImageCount; i++) {
-            vkDestroyBuffer(mCtx->logicalDevice, mPointLightsBuffer[i], nullptr);
-            vkFreeMemory(mCtx->logicalDevice, mPointLightsMemory[i], nullptr);
-        }
     }
 
     void PointLights::UpdateLightInfoPosition(const glm::vec4 &position, std::uint32_t lightId) {
@@ -149,27 +169,42 @@ namespace rn {
     }
 
     void PointLights::RenderPointLightShadowScene() {
+        List<VkCommandBuffer> activeCommandBuffer{};
         vkWaitForFences(mCtx->logicalDevice, 1, &renderShadowSceneFence, VK_TRUE, UINT64_MAX);
         vkResetFences(mCtx->logicalDevice, 1, &renderShadowSceneFence);
-        vkResetCommandBuffer(mShadowCommandBuffer, 0);
 
-        VkCommandBufferBeginInfo commandBufferBeginInfo{};
-        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        vkBeginCommandBuffer(mShadowCommandBuffer, &commandBufferBeginInfo);
         for (int i = 0; i < mPointLightShadowMaps.size(); i++) {
-            mPointLightShadowMaps[i]->UpdateLightInfoInShadowMap(mPointLightUBO.infos[i]);
-            mPointLightShadowMaps[i]->BeginPointShadowFrame();
-            mPointLightShadowMaps[i]->EndFrame();
+            mShadowMapThreads.emplace_back([&, i]() -> void {
+                vkResetCommandBuffer(mShadowCommandBuffer[i], 0);
+                VkCommandBufferBeginInfo commandBufferBeginInfo{};
+                commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+                vkBeginCommandBuffer(mShadowCommandBuffer[i], &commandBufferBeginInfo);
+                mPointLightShadowMaps[i]->UpdateLightInfoInShadowMap(mPointLightUBO.infos[i]);
+                mPointLightShadowMaps[i]->BeginPointShadowFrame(mShadowCommandBuffer[i]);
+                mPointLightShadowMaps[i]->EndFrame(mShadowCommandBuffer[i]);
+                vkEndCommandBuffer(mShadowCommandBuffer[i]);
+                {
+                    std::lock_guard<std::mutex> lockGuard{mutex_};
+                    activeCommandBuffer.emplace_back(mShadowCommandBuffer[i]);
+                }
+            });
         }
-        vkEndCommandBuffer(mShadowCommandBuffer);
+
+        for (auto &thread: mShadowMapThreads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &mPointLightShadowMapSemaphore;
-        submitInfo.pCommandBuffers = &mShadowCommandBuffer;
+        submitInfo.commandBufferCount = activeCommandBuffer.size();
+        submitInfo.pCommandBuffers = activeCommandBuffer.data();
 
         vkQueueSubmit(mCtx->graphicsQueue, 1, &submitInfo, renderShadowSceneFence);
 
@@ -188,14 +223,63 @@ namespace rn {
         Utility::CheckVulkanError(
                 vkCreateFence(mCtx->logicalDevice, &fenceCreateInfo, nullptr, &renderShadowSceneFence),
                 "Failed  to create the render shadow scene fence for the point lights");
-        // Allocating the command buffer;
-        VkCommandBufferAllocateInfo allocateInfo{};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocateInfo.commandBufferCount = 1;
-        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocateInfo.commandPool = mCtx->commandPool;
 
-        Utility::CheckVulkanError(vkAllocateCommandBuffers(mCtx->logicalDevice, &allocateInfo, &mShadowCommandBuffer),
-                                  "Failed to allocate the command buffer for the point light shadows");
+        VkCommandPool pool{};
+        mThreadedCommandPools = {MAX_POINT_LIGHTS, pool};
+        // Creating the command Pool For Each Thread;
+        VkCommandPoolCreateInfo commandPoolCreateInfo{};
+        commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        commandPoolCreateInfo.queueFamilyIndex = mCtx->graphicsQueueIndex;
+        for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+            Utility::CheckVulkanError(
+                    vkCreateCommandPool(mCtx->logicalDevice, &commandPoolCreateInfo, nullptr,
+                                        &mThreadedCommandPools[i]),
+                    "Failed to create the threaded command pool for point light shadows");
+        }
+
+        // Allocating the command buffer;
+
+        for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+            VkCommandBufferAllocateInfo allocateInfo{};
+            allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocateInfo.commandBufferCount = 1;
+            allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocateInfo.commandPool = mThreadedCommandPools[i];
+
+            Utility::CheckVulkanError(
+                    vkAllocateCommandBuffers(mCtx->logicalDevice, &allocateInfo, &mShadowCommandBuffer[i]),
+                    "Failed to allocate the command buffer for the point light shadows");
+        }
+    }
+
+    void PointLights::CreateDummyShadowBindingContext() {
+        mDummyShadowImage = Utility::CreateImage("Point Light Shadow Image", mCtx->physicalDevice, mCtx->logicalDevice,
+                                                 SHADOW_MAP_SIZE, SHADOW_MAP_SIZE,
+                                                 VK_FORMAT_R32_SFLOAT,
+                                                 VK_IMAGE_TILING_OPTIMAL,
+                                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                 mDummyImageMemory, 6, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+
+        Utility::CreateImageView(mCtx->logicalDevice, mDummyShadowImage, VK_FORMAT_R32_SFLOAT, mDummyShadowImageview,
+                                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 6, VK_IMAGE_VIEW_TYPE_CUBE);
+        VkSamplerCreateInfo samplerCreateInfo{};
+        samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+        samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+        samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        samplerCreateInfo.maxAnisotropy = 1.0;
+        samplerCreateInfo.compareEnable = VK_FALSE;
+        samplerCreateInfo.minLod = 0.0f;
+        samplerCreateInfo.maxLod = 1.0f;
+
+        Utility::CheckVulkanError(
+                vkCreateSampler(mCtx->logicalDevice, &samplerCreateInfo, nullptr, &mDummyShadowSampler),
+                "Failed to create th dummy sampler for the piont lights");
     }
 }

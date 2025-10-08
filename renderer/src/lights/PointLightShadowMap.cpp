@@ -8,18 +8,44 @@
 #include "StaticMesh.h"
 
 namespace rn {
-    PointLightShadowMap::PointLightShadowMap(RendererContext *ctx, rn::PointLightInfo lightInfo,
-                                             VkCommandBuffer commandBuffer) : mCtx{ctx},
-                                                                              mLightInfo{lightInfo},
-                                                                              mModelPushConstant{},
-                                                                              mCommandBuffer{commandBuffer},
-                                                                              mSampler{} {
+    PointLightShadowMap::PointLightShadowMap(RendererContext *ctx, rn::PointLightInfo lightInfo) : mCtx{ctx},
+                                                                                                   mLightInfo{
+                                                                                                           lightInfo},
+                                                                                                   mModelPushConstant{},
+                                                                                                   mSampler{} {
         CreateRenderPass();
         CreateFrameBuffersImagesAndImageViews();
         CreateDescriptors();
         CreateCommandBufferAndFences();
         CreatePipeline();
         CreateSampler();
+    }
+
+    PointLightShadowMap::~PointLightShadowMap() {
+        // Clearing the frame buffers;
+        for (int i = 0; i < 6; i++) {
+            vkDestroyFramebuffer(mCtx->logicalDevice, mFrameBuffers[i], nullptr);
+            vkDestroyImageView(mCtx->logicalDevice, mShadowRendingImageViews[i], nullptr);
+            vkFreeMemory(mCtx->logicalDevice, mShadowRenderingImageViewsMemory[i], nullptr);
+        }
+        vkDestroyImageView(mCtx->logicalDevice, mSamplerImageView, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mShadowImage, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mShadowImageMemory, nullptr);
+        vkDestroyImageView(mCtx->logicalDevice, mShadowImageDepthView, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mShadowImageDepth, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mShadowImageDepthMemory, nullptr);
+        vkDestroyDescriptorPool(mCtx->logicalDevice, mDescriptorPool, nullptr);
+
+        vkDestroySampler(mCtx->logicalDevice, mSampler, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, viewProjectionBuffer, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, viewProjectionMemory, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, mLightDataBuffer, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mLightDataMemory, nullptr);
+        vkDestroyPipeline(mCtx->logicalDevice, mPipeline, nullptr);
+        vkDestroyDescriptorSetLayout(mCtx->logicalDevice, mDescriptorSetLayout, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mPipelineLayout, nullptr);
+        vkDestroyRenderPass(mCtx->logicalDevice, mRenderPass, nullptr);
+
     }
 
     void PointLightShadowMap::CreateFrameBuffersImagesAndImageViews() {
@@ -33,18 +59,28 @@ namespace rn {
                                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                             mShadowImageMemory, 6, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+        mShadowImageDepth = Utility::CreateImage("Point Light Shadow Image View Depth", mCtx->physicalDevice,
+                                                 mCtx->logicalDevice,
+                                                 SHADOW_MAP_SIZE, SHADOW_MAP_SIZE,
+                                                 VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+                                                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                 mShadowImageDepthMemory);
+        Utility::CreateImageView(mCtx->logicalDevice, mShadowImageDepth, VK_FORMAT_D32_SFLOAT, mShadowImageDepthView,
+                                 VK_IMAGE_ASPECT_DEPTH_BIT);
 
         for (int i = 0; i < 6; i++) {
             Utility::CreateImageView(mCtx->logicalDevice, mShadowImage, VK_FORMAT_R32_SFLOAT,
                                      mShadowRendingImageViews[i], VK_IMAGE_ASPECT_COLOR_BIT, i);
+            List<VkImageView> attachments{mShadowRendingImageViews[i], mShadowImageDepthView};
             // Creating the frame Buffer;
             VkFramebufferCreateInfo framebufferCreateInfo{};
             framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferCreateInfo.height = SHADOW_MAP_SIZE;
             framebufferCreateInfo.width = SHADOW_MAP_SIZE;
             framebufferCreateInfo.flags = 0;
-            framebufferCreateInfo.attachmentCount = 1;
-            framebufferCreateInfo.pAttachments = &mShadowRendingImageViews[i];
+            framebufferCreateInfo.attachmentCount = attachments.size();
+            framebufferCreateInfo.pAttachments = attachments.data();
             framebufferCreateInfo.renderPass = mRenderPass;
             framebufferCreateInfo.layers = 1;
 
@@ -72,17 +108,33 @@ namespace rn {
         colorAttachmentReference.attachment = 0;
         colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+
+        VkAttachmentDescription depthAttachmentDescription{};
+        depthAttachmentDescription.format = VK_FORMAT_D32_SFLOAT;
+        depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkAttachmentReference depthAttachmentRef{};
+        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpassDescription{};
         subpassDescription.colorAttachmentCount = 1;
         subpassDescription.pColorAttachments = &colorAttachmentReference;
-        // subpassDescription.pDepthStencilAttachment = &colorAttachmentReference;
+        subpassDescription.pDepthStencilAttachment = &depthAttachmentRef;
 
+        List<VkAttachmentDescription> attachments{colorAttachmentDescription, depthAttachmentDescription};
         VkRenderPassCreateInfo renderPassCreateInfo{};
         renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         renderPassCreateInfo.subpassCount = 1;
         renderPassCreateInfo.pSubpasses = &subpassDescription;
-        renderPassCreateInfo.attachmentCount = 1;
-        renderPassCreateInfo.pAttachments = &colorAttachmentDescription;
+        renderPassCreateInfo.attachmentCount = attachments.size();
+        renderPassCreateInfo.pAttachments = attachments.data();
         renderPassCreateInfo.flags = 0;
 
         Utility::CheckVulkanError(vkCreateRenderPass(mCtx->logicalDevice, &renderPassCreateInfo, nullptr, &mRenderPass),
@@ -171,8 +223,8 @@ namespace rn {
         // depth/stencil - enable test and write
         VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{};
         depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencilStateCreateInfo.depthTestEnable = VK_FALSE;
-        depthStencilStateCreateInfo.depthWriteEnable = VK_FALSE;
+        depthStencilStateCreateInfo.depthTestEnable = VK_TRUE;
+        depthStencilStateCreateInfo.depthWriteEnable = VK_TRUE;
         depthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;
         depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
         depthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
@@ -186,13 +238,8 @@ namespace rn {
         dynamicState.pDynamicStates = dynamicStates.data();
 
         VkPipelineColorBlendAttachmentState cb{};
-        cb.blendEnable = VK_TRUE;
-        cb.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        cb.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        cb.colorBlendOp = VK_BLEND_OP_MIN;        // <-- keep MIN of incoming & stored
-        cb.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        cb.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        cb.alphaBlendOp = VK_BLEND_OP_MIN;        // match alpha too
+        cb.blendEnable = VK_FALSE;
+        cb.colorBlendOp = VK_BLEND_OP_MIN;
         cb.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
 
         VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{};
@@ -208,7 +255,7 @@ namespace rn {
         VkPipelineLayoutCreateInfo layoutCreateInfo{};
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutCreateInfo.setLayoutCount = 1;
-        layoutCreateInfo.pSetLayouts = &viewProjectionDescriptorSetLayout;
+        layoutCreateInfo.pSetLayouts = &mDescriptorSetLayout;
         layoutCreateInfo.pushConstantRangeCount = 1;
         layoutCreateInfo.pPushConstantRanges = &mModelPushConstant;
 
@@ -269,7 +316,7 @@ namespace rn {
         layoutCreateInfo.flags = 0;
 
         Utility::CheckVulkanError(vkCreateDescriptorSetLayout(mCtx->logicalDevice, &layoutCreateInfo, nullptr,
-                                                              &viewProjectionDescriptorSetLayout),
+                                                              &mDescriptorSetLayout),
                                   "Failed to create the layout for the view projection in the point lights");
         // Creating the descriptor set pool
         VkDescriptorPoolSize viewProjectionPoolSize{};
@@ -289,13 +336,13 @@ namespace rn {
         viewProjectionPoolCreateInfo.flags = 0;
 
         Utility::CheckVulkanError(vkCreateDescriptorPool(mCtx->logicalDevice, &viewProjectionPoolCreateInfo, nullptr,
-                                                         &viewProjectionDescriptorPool),
+                                                         &mDescriptorPool),
                                   "Failed to create the descriptor pool for the view projection point lights");
         VkDescriptorSetAllocateInfo allocateInfo{};
 
         allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocateInfo.pSetLayouts = &viewProjectionDescriptorSetLayout;
-        allocateInfo.descriptorPool = viewProjectionDescriptorPool;
+        allocateInfo.pSetLayouts = &mDescriptorSetLayout;
+        allocateInfo.descriptorPool = mDescriptorPool;
         allocateInfo.descriptorSetCount = 1;
 
         vkAllocateDescriptorSets(mCtx->logicalDevice, &allocateInfo, &viewProjectionDescriptorSet);
@@ -361,22 +408,23 @@ namespace rn {
 //                "Failed  to create the render shadow scene fence for the point lights");
     }
 
-    void PointLightShadowMap::BeginPointShadowFrame() {
+    void PointLightShadowMap::BeginPointShadowFrame(VkCommandBuffer commandBuffer) {
         ComputePointLightViewProjection();
         for (int i = 0; i < 6; i++) {
             VkRenderPassBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             beginInfo.renderPass = mRenderPass;
             beginInfo.framebuffer = mFrameBuffers[i];
-            VkClearValue clearValue{};
-            clearValue.color = {1.0, 1.0, 1.0, 1.0};
-            beginInfo.clearValueCount = 1;
-            beginInfo.pClearValues = &clearValue;
+            std::array<VkClearValue, 2> clearValue{};
+            clearValue[0].color = {1.0, 1.0, 1.0, 1.0};
+            clearValue[1].depthStencil.depth = 1.0;
+            beginInfo.clearValueCount = clearValue.size();
+            beginInfo.pClearValues = clearValue.data();
             beginInfo.renderArea.offset = {0, 0};
-            beginInfo.renderArea.extent = {static_cast<uint32_t>(mViewPort.width),
-                                           static_cast<uint32_t>(mViewPort.height)};
-            vkCmdBeginRenderPass(mCommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
+            beginInfo.renderArea.extent = {SHADOW_MAP_SIZE,
+                                           SHADOW_MAP_SIZE};
+            vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
 
             VkViewport viewport{};
             viewport.x = 0.0f;
@@ -389,36 +437,36 @@ namespace rn {
             VkRect2D scissor{};
             scissor.offset = {0, 0};
             scissor.extent = {SHADOW_MAP_SIZE, SHADOW_MAP_SIZE};
-            vkCmdSetViewport(mCommandBuffer, 0, 1, &viewport);
-            vkCmdSetScissor(mCommandBuffer, 0, 1, &scissor);
-            vkCmdSetDepthBias(mCommandBuffer, 1.25f, 0.0f, 1.75f);
+            vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+            vkCmdSetDepthBias(commandBuffer, 1.25f, 0.0f, 1.75f);
             UpdateDescriptorSet({mViewProjection.projection, mViewProjection.view[i]});
-            vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1,
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1,
                                     &viewProjectionDescriptorSet, 0,
                                     nullptr);
 
             Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = mCtx->GetSceneObjectMap()->begin();
             while (iter != mCtx->GetSceneObjectMap()->end()) {
 
-                vkCmdPushConstants(mCommandBuffer, mPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
+                vkCmdPushConstants(commandBuffer, mPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
                                    &iter->second->GetModelMatrix());
 
                 VkBuffer vertexBuffer = iter->second->GetVertexBuffer();
                 VkDeviceSize offset = {};
-                vkCmdBindVertexBuffers(mCommandBuffer, 0, 1, &vertexBuffer, &offset);
-                vkCmdBindIndexBuffer(mCommandBuffer, iter->second->GetIndexBuffer(), offset, VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &offset);
+                vkCmdBindIndexBuffer(commandBuffer, iter->second->GetIndexBuffer(), offset, VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(commandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
                 iter++;
             }
-            vkCmdEndRenderPass(mCommandBuffer);
+            vkCmdEndRenderPass(commandBuffer);
         }
     }
 
-    void PointLightShadowMap::EndFrame() {
-        ImageTransition();
+    void PointLightShadowMap::EndFrame(VkCommandBuffer commandBuffer) {
+        ImageTransition(commandBuffer);
     }
 
-    void PointLightShadowMap::ImageTransition() {
+    void PointLightShadowMap::ImageTransition(VkCommandBuffer commandBuffer) {
         VkImageMemoryBarrier imageMemoryBarrier{};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         imageMemoryBarrier.image = mShadowImage;
@@ -434,7 +482,7 @@ namespace rn {
         imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-        vkCmdPipelineBarrier(mCommandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                              0, 0, nullptr,
                              0, nullptr,
@@ -444,22 +492,22 @@ namespace rn {
     void PointLightShadowMap::ComputePointLightViewProjection() {
         mLightData.position = mLightInfo.position;
         mLightData.farPlane = 100;
-        mViewProjection.projection = glm::perspective(glm::radians(90.f),
-                                                      1.0f,
-                                                      .1f, 100.f);
-        mViewProjection.projection[1][1] *= -1;
 
-        glm::vec3 lightPos = glm::vec3{mLightInfo.position};
+        mViewProjection.projection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, mLightData.farPlane);
+        mViewProjection.projection[1][1] *= -1; // Vulkan clip correction
 
-        mViewProjection.view[0] = glm::lookAt(lightPos, lightPos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0)); // +X
+        glm::vec3 lightPos = glm::vec3(mLightInfo.position);
+
+        // Cubemap face orientations
+        mViewProjection.view[0] = glm::lookAt(lightPos, lightPos + glm::vec3( 1, 0, 0), glm::vec3(0, -1, 0)); // +X
         mViewProjection.view[1] = glm::lookAt(lightPos, lightPos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0)); // -X
-        mViewProjection.view[2] = glm::lookAt(lightPos, lightPos + glm::vec3(0, 1, 0), glm::vec3(0, 0, -1)); // +Y
-        mViewProjection.view[3] = glm::lookAt(lightPos, lightPos + glm::vec3(0, -1, 0), glm::vec3(0, 0, 1)); // -Y
-        mViewProjection.view[4] = glm::lookAt(lightPos, lightPos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0)); // +Z
-        mViewProjection.view[5] = glm::lookAt(lightPos, lightPos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0)); // -Z
+        mViewProjection.view[2] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  1, 0), glm::vec3(0,  0, 1)); // +Y
+        mViewProjection.view[3] = glm::lookAt(lightPos, lightPos + glm::vec3(0, -1, 0), glm::vec3(0,  0,-1)); // -Y
+        mViewProjection.view[4] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  0, 1), glm::vec3(0, -1, 0)); // +Z
+        mViewProjection.view[5] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  0,-1), glm::vec3(0, -1, 0)); // -Z
 
     }
-
+ 
     void PointLightShadowMap::CreateSampler() {
         VkSamplerCreateInfo sampInfo{};
         sampInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;

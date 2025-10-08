@@ -10,6 +10,6 @@ layout (set = 0, binding = 1) uniform LightData {
 layout (location = 0) out float depth;
 
 void main() {
-    float distance = length(lightData.position.xyz -vWorldPos );
+    float distance = length(vWorldPos - lightData.position.xyz);
     depth = distance / 100;
 }
