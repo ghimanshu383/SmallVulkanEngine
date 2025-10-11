@@ -13,7 +13,7 @@ namespace rn {
         SimpleCubeMeshBox();
         CreateDescriptorPoolAndAllocateSets();
         CreatePipeline();
-         CreateImageAndImageViews();
+        CreateImageAndImageViews();
         CreateSamplerAndWriteDescriptorSet();
     }
 
@@ -130,8 +130,8 @@ namespace rn {
         layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutCreateInfo.pushConstantRangeCount = 1;
         layoutCreateInfo.pPushConstantRanges = &viewProjectionPush;
-           layoutCreateInfo.setLayoutCount = 1;
-         layoutCreateInfo.pSetLayouts = &mSetLayout;
+        layoutCreateInfo.setLayoutCount = 1;
+        layoutCreateInfo.pSetLayouts = &mSetLayout;
 
         Utility::CheckVulkanError(vkCreatePipelineLayout(mCtx->logicalDevice, &layoutCreateInfo, nullptr, &mLayout),
                                   "Failed to create the layout for the sky box");
@@ -283,8 +283,11 @@ namespace rn {
     }
 
     void Skybox::CreateImageAndImageViews() {
+        int faceSize, channels;
+        List<unsigned char *> cubeFaces = Utility::LoadCubeMapCross(
+                R"(D:\cProjects\SmallVkEngine\renderer\cubemaps\FS000_Day_01.png)", faceSize, channels);
         mSkyBoxImage = Utility::CreateImage("Sky box Image", mCtx->physicalDevice, mCtx->logicalDevice,
-                                            SKY_BOX_RESOLUTION, SKY_BOX_RESOLUTION, VK_FORMAT_R8G8B8A8_SRGB,
+                                            faceSize, faceSize, VK_FORMAT_R8G8B8A8_SRGB,
                                             VK_IMAGE_TILING_OPTIMAL,
                                             (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -297,28 +300,25 @@ namespace rn {
         mStagingBuffers.resize(6);
         mStagingBufferMemory.resize(6);
 
+
         for (int i = 0; i < 6; i++) {
-            int height, width;
-            VkDeviceSize imageSize;
-            uint8_t *imageData = Utility::LoadTextureImage(R"(D:\cProjects\SmallVkEngine\textures\Textile.jpg)", width,
-                                                           height, imageSize);
-            VkDeviceSize SkyBoxImageSize = 4 * SKY_BOX_RESOLUTION * SKY_BOX_RESOLUTION;
-            unsigned char *resizeData = new unsigned char[4 * SKY_BOX_RESOLUTION * SKY_BOX_RESOLUTION]{};
-            stbir_resize_uint8_linear(reinterpret_cast<unsigned char *>(imageData), width, height, 0, resizeData,
-                                      SKY_BOX_RESOLUTION, SKY_BOX_RESOLUTION,
-                                      0, STBIR_RGBA);
+            VkDeviceSize SkyBoxImageSize = 4 * faceSize * faceSize;
+//            unsigned char *resizeData = new unsigned char[4 * SKY_BOX_RESOLUTION * SKY_BOX_RESOLUTION]{};
+//            stbir_resize_uint8_linear(reinterpret_cast<unsigned char *>(imageData), faceSize, faceSize, 0, resizeData,
+//                                      SKY_BOX_RESOLUTION, SKY_BOX_RESOLUTION,
+//                                      0, STBIR_RGBA);
 
             Utility::CreateBuffer(*mCtx, mStagingBuffers[i], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, mStagingBufferMemory[i],
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                  4 * SKY_BOX_RESOLUTION * SKY_BOX_RESOLUTION, "Sky Box Buffer");
+                                  4 * faceSize * faceSize, "Sky Box Buffer");
             void *data;
             vkMapMemory(mCtx->logicalDevice, mStagingBufferMemory[i], 0, SkyBoxImageSize, 0, &data);
-            memcpy(data, resizeData, SkyBoxImageSize);
+            memcpy(data, cubeFaces[i], SkyBoxImageSize);
             vkUnmapMemory(mCtx->logicalDevice, mStagingBufferMemory[i]);
-            stbi_image_free(imageData);
-            delete[] resizeData;
+            //   delete[] resizeData;
+            delete[] cubeFaces[i];
 
-            Utility::CopyBufferToImage(*mCtx, mStagingBuffers[i], mSkyBoxImage, SKY_BOX_RESOLUTION, SKY_BOX_RESOLUTION,
+            Utility::CopyBufferToImage(*mCtx, mStagingBuffers[i], mSkyBoxImage, faceSize, faceSize,
                                        VK_IMAGE_ASPECT_COLOR_BIT, i);
             vkDestroyBuffer(mCtx->logicalDevice, mStagingBuffers[i], nullptr);
             vkFreeMemory(mCtx->logicalDevice, mStagingBufferMemory[i], nullptr);

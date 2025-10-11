@@ -8,5 +8,7 @@ glslc D:\cProjects\SmallVkEngine\Shaders\cubeShadow.vert -o D:\cProjects\SmallVk
 glslc D:\cProjects\SmallVkEngine\Shaders\cubeShadow.frag -o D:\cProjects\SmallVkEngine\Shaders\cubeShadow.frag.spv
 glslc D:\cProjects\SmallVkEngine\Shaders\Skybox.vert -o D:\cProjects\SmallVkEngine\Shaders\Skybox.ver.spv
 glslc D:\cProjects\SmallVkEngine\Shaders\Skybox.frag -o D:\cProjects\SmallVkEngine\Shaders\Skybox.frag.spv
+glslc D:\cProjects\SmallVkEngine\Shaders\pbr.vert -o D:\cProjects\SmallVkEngine\Shaders\pbr.ver.spv
+glslc D:\cProjects\SmallVkEngine\Shaders\pbr.frag -o D:\cProjects\SmallVkEngine\Shaders\pbr.frag.spv
 
 pause

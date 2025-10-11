@@ -63,6 +63,8 @@ namespace rn {
         const VkDescriptorSet &GetShadowDescriptorSet(size_t currentImageIndex) {
             return mPointLightShadowDescriptorSets[currentImageIndex];
         }
+
+        const PointLightUBO &GetPointLightUBO() { return mPointLightUBO; }
     };
 }
 #endif //SMALLVKENGINE_POINTLIGHTS_H

@@ -116,6 +116,7 @@ namespace rn {
         VkDescriptorSetLayout pointLightShadowLayout;
         VkDescriptorPool pointLightDescriptorPool;
         VkDescriptorPool pointLightShadowPool;
+        List<VkFramebuffer> *offScreenFrameBuffers;
 
         class PointLights *pointLight;
 
@@ -143,6 +144,8 @@ namespace rn {
 
         void (*SetUpAsDirectionalLight)(class OmniDirectionalLight *directionalLight);
 
+        const OmniDirectionalInfo &(*GetDirectionalLightInfo)();
+
         void (*AddRendererEvent)(const RendererEvent &event);
 
         std::uint32_t (*GetActiveClickedObjectId)();
@@ -160,6 +163,14 @@ namespace rn {
 
     };
 
+    enum CubeFace {
+        POS_X = 0,
+        NEG_X = 1,
+        POS_Y = 2,
+        NEG_Y = 3,
+        POS_Z = 4,
+        NEG_Z = 5
+    };
 
     class Utility {
     public:
@@ -176,6 +187,49 @@ namespace rn {
             inputStream.seekg(0);
             inputStream.read(reinterpret_cast<char *>(buffer.data()), fileSize);
             inputStream.close();
+        }
+
+        static List<unsigned char *> LoadCubeMapCross(const char *fileName, int &faceSize, int &channels) {
+            int width, height;
+            unsigned char *imageData = stbi_load(fileName, &width, &height, &channels, STBI_rgb_alpha);
+            if (!imageData) {
+                LOG_ERROR("Failed to load the cube cross Image");
+                // TODO load the default cube map here
+                std::exit(EXIT_FAILURE);
+            }
+            faceSize = width / 4;
+            channels = 4;
+
+            if (height != 3 * faceSize) {
+                LOG_ERROR("Invalid Cube Map Image");
+                std::exit(EXIT_FAILURE);
+            }
+            List<unsigned char *> faces(6);
+
+            std::function<void(int, int, int)> copyFace = [&](int faceIndex, int col, int row) -> void {
+                unsigned char *faceData = new unsigned char[faceSize * faceSize * channels];
+                for (int y = 0; y < faceSize; y++) {
+                    int srcY = row * faceSize + y;
+                    for (int x = 0; x < faceSize; x++) {
+                        int srcX = col * faceSize + x;
+
+                        int srcIndex = (srcY * width + srcX) * channels;
+                        int dstIndex = (y * faceSize + x) * channels;
+
+                        memcpy(&faceData[dstIndex], &imageData[srcIndex], channels);
+                    }
+                }
+                faces[faceIndex] = faceData;
+            };
+
+            copyFace(POS_X, 2, 1); // +X
+            copyFace(NEG_X, 0, 1); // -X
+            copyFace(POS_Y, 1, 0); // +Y
+            copyFace(NEG_Y, 1, 2); // -Y
+            copyFace(POS_Z, 1, 1); // +Z
+            copyFace(NEG_Z, 3, 1); // -Z
+            stbi_image_free(imageData);
+            return faces;
         }
 
         static void CheckVulkanError(VkResult result, const char *message) {

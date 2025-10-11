@@ -52,7 +52,7 @@ float CalcPointLightShadowFactor(int lightIndex, vec3 fragPos) {
     vec3 fragToLight = pointLightInfo.lights[lightIndex].position.xyz - fragPos;
     float current = length(fragToLight);
 
-    float closest = texture(pointLightShadowMaps[lightIndex], normalize(fragToLight)).r * 100;
+    float closest = texture(pointLightShadowMaps[lightIndex], fragToLight).r * 100;
 
     float bias = .005;
     return (current - bias > closest) ? 0.0 : 1.0;
@@ -60,18 +60,19 @@ float CalcPointLightShadowFactor(int lightIndex, vec3 fragPos) {
 vec4 CalculatePointLights() {
     vec4 totalPointLightColor = vec4(0, 0, 0, 1);
     for (int i = 0; i < pointLightInfo.lightCount; i++) {
-        vec3 direction = vWorldPos - pointLightInfo.lights[i].position.xyz;
+        vec3 direction = pointLightInfo.lights[i].position.xyz - vWorldPos;
         float distance = length(direction);
         direction = normalize(direction);
         vec4 ambientLight = pointLightInfo.lights[i].intensities.x * pointLightInfo.lights[i].color;
 
-        float diffuseFactor = max(dot(normalize(vWorldPos), direction), 0.0);
-        vec4 diffuseLight = pointLightInfo.lights[i].intensities.y * pointLightInfo.lights[i].color * diffuseFactor;
+        float diffuseFactor = max(dot(normalize(vNormals), direction), 0.0);
+        float shadowFactor = CalcPointLightShadowFactor(i, vWorldPos);
+        vec4 diffuseLight = pointLightInfo.lights[i].intensities.y * pointLightInfo.lights[i].color * diffuseFactor * shadowFactor;
         vec4 pointColor = ambientLight + diffuseLight;
 
-        float shadowFactor = CalcPointLightShadowFactor(i, vWorldPos);
+
         float attenuation = 1 / (2 * distance * distance + 2 * distance + 2);
-        totalPointLightColor += pointColor * attenuation * shadowFactor;
+        totalPointLightColor += pointColor * attenuation;
     }
     return totalPointLightColor;
 }
@@ -88,4 +89,5 @@ vec4 CalculatePongLights() {
 void main() {
     color = texture(defaultSampler, textureCoords) * (CalculatePongLights() + CalculatePointLights());
     id = vPickId;
+
 }

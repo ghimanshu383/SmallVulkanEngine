@@ -175,7 +175,7 @@ namespace vk {
         rn::OmniDirectionalInfo skyLightInfo{};
         skyLightInfo.position = {0, 3, 1, 1};
         skyLightInfo.color = {1, 1, 1, 1};
-        skyLightInfo.intensities = {.7, 1, 0, 0};
+        skyLightInfo.intensities = {.7, .6, 0, 0};
 
 
         std::shared_ptr<SkyLight> skyLight = mDefaultScene->SpawnGameObject<SkyLight>("Default Sky Light",
@@ -191,13 +191,13 @@ namespace vk {
         // Setting up the point lights;
         rn::PointLightInfo pointLightInfo{{1, 1,  -5, 1},
                                           {1, 1,  0,  1},
-                                          {2, .7, 1,  1}};
+                                          {.5, 2, 1,  1}};
         std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light One",
 
         pointLightInfo);
         rn::PointLightInfo pointLightInfoTwo{{-1, 1,  -5, 1},
                                           {1, 0,  1,  1},
-                                          {2, .7, 1,  1}};
+                                          {.5, 4, 1,  1}};
 //        std::shared_ptr<PointLight> lightTwo = mDefaultScene->SpawnGameObject<PointLight>("Point Light Two",
 //                                                                                          pointLightInfoTwo);
 

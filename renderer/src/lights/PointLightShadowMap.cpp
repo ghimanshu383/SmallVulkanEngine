@@ -494,20 +494,20 @@ namespace rn {
         mLightData.farPlane = 100;
 
         mViewProjection.projection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, mLightData.farPlane);
-        mViewProjection.projection[1][1] *= -1; // Vulkan clip correction
+        mViewProjection.projection[1][1] *= -1;
 
         glm::vec3 lightPos = glm::vec3(mLightInfo.position);
 
         // Cubemap face orientations
         mViewProjection.view[0] = glm::lookAt(lightPos, lightPos + glm::vec3( 1, 0, 0), glm::vec3(0, -1, 0)); // +X
         mViewProjection.view[1] = glm::lookAt(lightPos, lightPos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0)); // -X
-        mViewProjection.view[2] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  1, 0), glm::vec3(0,  0, 1)); // +Y
+        mViewProjection.view[2] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  1, 0), glm::vec3(0,  0,  1)); // +Y
         mViewProjection.view[3] = glm::lookAt(lightPos, lightPos + glm::vec3(0, -1, 0), glm::vec3(0,  0,-1)); // -Y
         mViewProjection.view[4] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  0, 1), glm::vec3(0, -1, 0)); // +Z
         mViewProjection.view[5] = glm::lookAt(lightPos, lightPos + glm::vec3(0,  0,-1), glm::vec3(0, -1, 0)); // -Z
 
     }
- 
+
     void PointLightShadowMap::CreateSampler() {
         VkSamplerCreateInfo sampInfo{};
         sampInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;

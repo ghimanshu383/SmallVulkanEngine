@@ -43,6 +43,12 @@ add_library(${RENDERER} STATIC
         include/SkyBox.h
         src/Skybox.cpp
         include/stb_image_resize2.h
+        include/pbr/PbrMaterials.h
+        include/pbr/PbrImpl.h
+        src/pbr/PbrMaterials.cpp
+        src/pbr/PbrImpl.cpp
+        include/pbr/PbrTexture.h
+        src/pbr/PbrTexture.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

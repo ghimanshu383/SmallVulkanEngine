@@ -12,6 +12,7 @@
 #include "lights/ShadowMap.h"
 #include "Gizmos.h"
 #include "SkyBox.h"
+#include "pbr/PbrImpl.h"
 
 
 namespace rn {
@@ -30,6 +31,8 @@ namespace rn {
     AXIS Graphics::activeGizmoAxis = AXIS::NONE;
     Gizmos *Graphics::mGizmos = nullptr;
     Skybox *Graphics::mSkyBox = nullptr;
+    PbrImpl *Graphics::mPbr = nullptr;
+
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
         InitVulkan();
@@ -81,6 +84,15 @@ namespace rn {
         mGizmos->SetGizmoType(type);
     }
 
+
+    const OmniDirectionalInfo &Graphics::GetDirectionalLightInfo() {
+        if (mDirectionalLight != nullptr) {
+            return mDirectionalLight->GetOmniDirectionalInfo();
+        }
+        LOG_WARN("The Directional Light Is Not Set in the Context ");
+        return OmniDirectionalInfo();
+    }
+
     GIZMO_TYPE Graphics::GetGizmoType() {
         return mGizmos->GetGizmoType();
     }
@@ -121,6 +133,7 @@ namespace rn {
         mRendererContext.pointLight = mPointLights;
         // Setting up the default Sky box;
         mSkyBox = new Skybox{&mRendererContext};
+        mPbr = new PbrImpl{&mRendererContext};
     }
 
     Graphics::~Graphics() {
@@ -378,7 +391,8 @@ namespace rn {
         deviceCreateInfo.queueCreateInfoCount = queueCreateInfos.size();
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
         // Get physical Device Extensions for the swapchain
-        List<const char *> requiredExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        List<const char *> requiredExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                                                 VK_EXT_NESTED_COMMAND_BUFFER_EXTENSION_NAME};
         List<VkExtensionProperties> availableExtensionProperties{};
         GetPhysicalDeviceExtensionProperties(physicalDevice, availableExtensionProperties);
         CheckAvailability<VkExtensionProperties>(requiredExtensions, availableExtensionProperties,
@@ -386,11 +400,21 @@ namespace rn {
         deviceCreateInfo.enabledExtensionCount = requiredExtensions.size();
         deviceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
         // Enabling required features for the physical device on to the logical device
+        VkPhysicalDeviceNestedCommandBufferFeaturesEXT nestedFeatures{};
+        nestedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_FEATURES_EXT;
+        nestedFeatures.nestedCommandBuffer = VK_TRUE;
+
         VkPhysicalDeviceFeatures deviceFeatures{};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
         deviceFeatures.independentBlend = VK_TRUE;
         deviceFeatures.wideLines = VK_TRUE;
+
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &nestedFeatures;
+
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+        deviceCreateInfo.pNext = &features2;
 
         Utility::CheckVulkanError(
                 vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevices.logicalDevice),
@@ -997,6 +1021,7 @@ namespace rn {
                                                           &mOffScreenFrameBuffers[i]),
                                       "Failed to create the frame buffers for the offscreen rendering");
         }
+        mRendererContext.offScreenFrameBuffers = &mOffScreenFrameBuffers;
     }
 
     void Graphics::CreateFrameBuffers() {
@@ -1068,10 +1093,16 @@ namespace rn {
         renderPassBeginInfo.clearValueCount = clearValues.size();
         renderPassBeginInfo.pClearValues = clearValues.data();
 
-        vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo,
+                             VK_SUBPASS_CONTENTS_INLINE_AND_SECONDARY_COMMAND_BUFFERS_EXT);
 
         // Rendering the sky box // This has to be done before binding the main pipeline and rendering the scene else the scene will use the sky box pipeline
         mSkyBox->RenderSkyBox();
+        //Rendering the Pbr Scenes here and binding the pipeline for the same here.
+        mPbr->Render(mCurrentImageIndex);
+        // The secondary command buffer is not used as the gpu was not responding to the parallel processing and the overhead increased.
+        List<VkCommandBuffer> secondaryCommandBuffer{mPbr->GetSecondaryCommandBuffer()};
+        vkCmdExecuteCommands(mCommandBuffer, secondaryCommandBuffer.size(), secondaryCommandBuffer.data());
 
         vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
 

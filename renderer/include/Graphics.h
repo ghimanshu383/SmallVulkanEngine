@@ -24,6 +24,8 @@ namespace rn {
 
         static AXIS activeGizmoAxis;
 
+        static class PbrImpl *mPbr;
+
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -207,6 +209,7 @@ namespace rn {
             mRendererContext.GetActiveGizmoAxis = &GetActiveGizmoAxis;
             mRendererContext.SetGizmoType = &SetGizmoType;
             mRendererContext.GetGizmoType = &GetGizmoType;
+            mRendererContext.GetDirectionalLightInfo = &GetDirectionalLightInfo;
         }
 
         static void RegisterMeshObject(std::string &id, class StaticMesh *meshObject) {
@@ -226,6 +229,8 @@ namespace rn {
         static AXIS GetActiveGizmoAxis() {
             return activeGizmoAxis;
         }
+
+        static const OmniDirectionalInfo &GetDirectionalLightInfo();
 
         static void SetGizmoType(const GIZMO_TYPE &type);
 
