@@ -19,12 +19,14 @@ namespace vk {
         List<rn::Vertex> mVertexList;
         List<std::uint32_t> mIndexList;
         rn::StaticMesh *mStaticMesh;
-        std::string mTextureId;
         bool mCalculateNormals;
+        std::string mModelTexturePath;
         GizmoDragController gizmoDragController{};
     public:
         MeshComponent(GameObject *gameObject, const std::string &id, List<rn::Vertex> &vertices,
-                      List<std::uint32_t> &indices, std::string textureId = "", bool calculateNormals = false);
+                      List<std::uint32_t> &indices,
+                      bool calculateNormals = false,
+                      const std::string &modelTexturePath = "");
 
         ~MeshComponent();
 

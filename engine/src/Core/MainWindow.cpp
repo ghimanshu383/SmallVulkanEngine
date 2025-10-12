@@ -138,12 +138,7 @@ namespace vk {
                 4, 5, 1, 4, 1, 0
         };
         std::shared_ptr<GameObject> testObject = mDefaultScene->SpawnGameObject<GameObject>("Test Object");
-
-        std::string meshName = "Triangle Mesh";
-
-        testObject->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\brick.png)", mCtx);
-        //testObject->SpawnComponent<MeshComponent>(meshName, vertOne, indices, "", true);
-        std::string tranName = meshName + " Transform";
+        std::string meshName = "HouseModel";
         std::shared_ptr tranComp = testObject->SpawnComponent<TransformComponent>(meshName);
         testObject->SpawnComponent<ModelComponent>("Test Comp",
                                                    R"(D:\cProjects\SmallVkEngine\models\simpleModels\building-a.obj)");
@@ -153,8 +148,9 @@ namespace vk {
 
 
         std::shared_ptr<GameObject> plane = mDefaultScene->SpawnGameObject<GameObject>("Plane Object");
-        plane->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
-        plane->SpawnComponent<MeshComponent>("Plane", vertOne, indices, "", true);
+        plane->SpawnComponent<TextureComponent>(rn::BASE_PBR_MATERIAL_ID, mCtx,
+                                                rn::MATERIAL_TYPE::PBR);
+        plane->SpawnComponent<MeshComponent>("Plane", vertOne, indices, true);
         std::shared_ptr<TransformComponent> planTran = plane->SpawnComponent<TransformComponent>(
                 "PlaneTransformComponent");
         planTran->setTranslate({0, 0, 0});
@@ -164,7 +160,7 @@ namespace vk {
 
         std::shared_ptr<GameObject> objectTwo = mDefaultScene->SpawnGameObject<GameObject>("Cube");
 
-        objectTwo->SpawnComponent<MeshComponent>("ObjectTwoMesh", cubeVertices, cubeIndices, "", true);
+        objectTwo->SpawnComponent<MeshComponent>("ObjectTwoMesh", cubeVertices, cubeIndices, true);
         std::shared_ptr<TransformComponent> objectTwoTran = objectTwo->SpawnComponent<TransformComponent>(
                 "ObjectTwoTranComponent");
         objectTwoTran->setTranslate({0, 1, -2});
@@ -175,29 +171,30 @@ namespace vk {
         rn::OmniDirectionalInfo skyLightInfo{};
         skyLightInfo.position = {0, 3, 1, 1};
         skyLightInfo.color = {1, 1, 1, 1};
-        skyLightInfo.intensities = {.7, .6, 0, 0};
+        skyLightInfo.intensities = {1, 1, 0, 0};
 
 
         std::shared_ptr<SkyLight> skyLight = mDefaultScene->SpawnGameObject<SkyLight>("Default Sky Light",
                                                                                       skyLightInfo);
 
-        skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
-        skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", cubeVertices, cubeIndices, "", true);
+        skyLight->SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx,
+                                                   rn::MATERIAL_TYPE::PHONG);
+        skyLight->SpawnComponent<MeshComponent>("Sky Light Mesh", cubeVertices, cubeIndices, true);
         std::shared_ptr<TransformComponent> transformComponent = skyLight->SpawnComponent<TransformComponent>(
                 "Sky Light transform Component");
         transformComponent->setTranslate(skyLight->GetLightInfo().position);
         transformComponent->setScale({.3, .3, .3});
 
         // Setting up the point lights;
-        rn::PointLightInfo pointLightInfo{{1, 1,  -5, 1},
-                                          {1, 1,  0,  1},
+        rn::PointLightInfo pointLightInfo{{1,  1, -5, 1},
+                                          {1,  1, 0,  1},
                                           {.5, 2, 1,  1}};
         std::shared_ptr<PointLight> lightOne = mDefaultScene->SpawnGameObject<PointLight>("Point Light One",
 
-        pointLightInfo);
-        rn::PointLightInfo pointLightInfoTwo{{-1, 1,  -5, 1},
-                                          {1, 0,  1,  1},
-                                          {.5, 4, 1,  1}};
+                                                                                          pointLightInfo);
+        rn::PointLightInfo pointLightInfoTwo{{-1, 1, -5, 1},
+                                             {1,  0, 1,  1},
+                                             {.5, 4, 1,  1}};
 //        std::shared_ptr<PointLight> lightTwo = mDefaultScene->SpawnGameObject<PointLight>("Point Light Two",
 //                                                                                          pointLightInfoTwo);
 

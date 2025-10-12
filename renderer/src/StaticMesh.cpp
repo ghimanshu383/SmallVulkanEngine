@@ -7,9 +7,9 @@
 namespace rn {
     StaticMesh::StaticMesh(RendererContext &ctx, List<rn::Vertex> &Vertices, List<std::uint32_t> &indices,
                            std::uint32_t pickId,
-                           std::string &textureId, bool calculateNormals)
+                           std::string &textureId, bool calculateNormals, MATERIAL_TYPE materialType)
             : mRenderContext{ctx}, mVertList{Vertices}, mIndicesList{indices}, mPickId{pickId}, mTextureId{textureId},
-              mCalculateNormals{calculateNormals} {
+              mCalculateNormals{calculateNormals}, mMaterialType{materialType} {
         mIndicesCount = indices.size();
         Init();
     }
@@ -20,8 +20,8 @@ namespace rn {
             Vertex &vertTwo = mVertList[mIndicesList[i + 1]];
             Vertex &vertThree = mVertList[mIndicesList[i + 2]];
 
-            glm::vec3 normalVecOne = {vertTwo.pos - verOne.pos };
-            glm::vec3 normalVecTwo = {vertThree.pos - verOne.pos };
+            glm::vec3 normalVecOne = {vertTwo.pos - verOne.pos};
+            glm::vec3 normalVecTwo = {vertThree.pos - verOne.pos};
             glm::vec3 normal = glm::normalize(glm::cross(normalVecOne, normalVecTwo));
 
             verOne.normals += normal;

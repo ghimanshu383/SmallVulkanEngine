@@ -31,7 +31,6 @@ namespace rn {
     AXIS Graphics::activeGizmoAxis = AXIS::NONE;
     Gizmos *Graphics::mGizmos = nullptr;
     Skybox *Graphics::mSkyBox = nullptr;
-    PbrImpl *Graphics::mPbr = nullptr;
 
 
     Graphics::Graphics(GLFWwindow *window) : mRenderWindow{window} {
@@ -133,7 +132,6 @@ namespace rn {
         mRendererContext.pointLight = mPointLights;
         // Setting up the default Sky box;
         mSkyBox = new Skybox{&mRendererContext};
-        mPbr = new PbrImpl{&mRendererContext};
     }
 
     Graphics::~Graphics() {
@@ -155,6 +153,7 @@ namespace rn {
             delete texture;
             textureIter++;
         }
+
         // Just for testing the light make the light in the engine as a game object;
         delete mDirectionalLight;
         delete mPointLights;
@@ -185,6 +184,8 @@ namespace rn {
             delete mesh;
             iter++;
         }
+        PbrImpl::GetInstance(&mRendererContext)->CleanUp();
+        delete mSkyBox;
         delete mGizmos;
         vkDestroyCommandPool(mDevices.logicalDevice, mCommandPool, nullptr);
         for (VkFramebuffer framebuffer: mFrameBuffers) {
@@ -249,7 +250,7 @@ namespace rn {
         applicationInfo.pApplicationName = "Small Vulkan Engine Renderer";
         applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         applicationInfo.pEngineName = "Small Vulkan Engine";
-        applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
+        applicationInfo.apiVersion = VK_MAKE_VERSION(1, 2, 0);
 
 
         VkInstanceCreateInfo instanceCreateInfo{};
@@ -404,16 +405,18 @@ namespace rn {
         nestedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_FEATURES_EXT;
         nestedFeatures.nestedCommandBuffer = VK_TRUE;
 
-        VkPhysicalDeviceFeatures deviceFeatures{};
-        deviceFeatures.samplerAnisotropy = VK_TRUE;
-        deviceFeatures.independentBlend = VK_TRUE;
-        deviceFeatures.wideLines = VK_TRUE;
+        VkPhysicalDeviceFeatures features{};
+        features.wideLines = VK_TRUE;
+        features.samplerAnisotropy = VK_TRUE;
+        features.independentBlend = VK_TRUE;
 
         VkPhysicalDeviceFeatures2 features2{};
         features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.features.wideLines = VK_TRUE;
+        features2.features.samplerAnisotropy = VK_TRUE;
+        features2.features.independentBlend = VK_TRUE;
         features2.pNext = &nestedFeatures;
 
-        deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
         deviceCreateInfo.pNext = &features2;
 
         Utility::CheckVulkanError(
@@ -640,7 +643,7 @@ namespace rn {
         depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -654,6 +657,20 @@ namespace rn {
         VkAttachmentReference depthAttachmentRef{};
         depthAttachmentRef.attachment = 1;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependency.dstStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
         VkSubpassDescription subpassDescriptionOne{};
         subpassDescriptionOne.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -669,6 +686,8 @@ namespace rn {
         renderPassCreateInfo.pAttachments = attachments.data();
         renderPassCreateInfo.subpassCount = subPass.size();
         renderPassCreateInfo.pSubpasses = subPass.data();
+        renderPassCreateInfo.dependencyCount = 1;
+        renderPassCreateInfo.pDependencies = &dependency;
 
         // Create the Render Pass
         Utility::CheckVulkanError(
@@ -758,7 +777,7 @@ namespace rn {
         Utility::CheckVulkanError(
                 vkCreateRenderPass(mDevices.logicalDevice, &renderPassCreateInfo, nullptr, &mOffScreenRenderPass),
                 "Failed to create the Render Pass");
-        mRendererContext.offScreenRenderPass = mOffScreenRenderPass;
+        mRendererContext.offScreenRenderPass = &mOffScreenRenderPass;
     }
 
     void Graphics::CreatePipeline() {
@@ -1098,11 +1117,16 @@ namespace rn {
 
         // Rendering the sky box // This has to be done before binding the main pipeline and rendering the scene else the scene will use the sky box pipeline
         mSkyBox->RenderSkyBox();
+
         //Rendering the Pbr Scenes here and binding the pipeline for the same here.
-        mPbr->Render(mCurrentImageIndex);
         // The secondary command buffer is not used as the gpu was not responding to the parallel processing and the overhead increased.
-        List<VkCommandBuffer> secondaryCommandBuffer{mPbr->GetSecondaryCommandBuffer()};
+        // Rendering the Materials with Pbr Materials;
+        RenderPbrMesh(mCurrentImageIndex);
+
+        List<VkCommandBuffer> secondaryCommandBuffer{
+                PbrImpl::GetInstance(&mRendererContext)->GetSecondaryCommandBuffer()};
         vkCmdExecuteCommands(mCommandBuffer, secondaryCommandBuffer.size(), secondaryCommandBuffer.data());
+
 
         vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
 
@@ -1166,6 +1190,20 @@ namespace rn {
         return true;
     }
 
+    void Graphics::RenderPbrMesh(std::uint32_t currentImage) {
+        Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
+        while (iter != meshObjectList.end()) {
+            if (iter->second->GetMaterialType() == MATERIAL_TYPE::PHONG) {
+                iter++;
+                continue;
+            }
+            PbrImpl::GetInstance(&mRendererContext)->Render(currentImage, iter->second);
+            iter++;
+        }
+        vkCmdExecuteCommands(mCommandBuffer, 1, &PbrImpl::GetInstance(&mRendererContext)->GetSecondaryCommandBuffer());
+
+    }
+
     void Graphics::Draw() {
         //vkCmdDraw(mCommandBuffer, 3, 1, 0, 0);
         // Setting the Shadow Scene Render Pass before the draw calls
@@ -1177,6 +1215,10 @@ namespace rn {
         mPointLights->RenderPointLightShadowScene();
         Map<std::string, StaticMesh *, std::hash<std::string>>::iterator iter = meshObjectList.begin();
         while (iter != meshObjectList.end()) {
+            if (iter->second->GetMaterialType() == MATERIAL_TYPE::PBR) {
+                iter++;
+                continue;
+            }
             List<VkDescriptorSet> descriptorSets{};
             std::uint32_t currentIndex = std::distance(meshObjectList.begin(), iter);
             std::uint32_t dynamicOffset = std::uint32_t(mModelMinAlignment) * currentIndex;
@@ -1224,6 +1266,7 @@ namespace rn {
             vkCmdDrawIndexed(mCommandBuffer, iter->second->GetStaticMeshIndicesCount(), 1, 0, 0, 0);
             iter++;
         }
+
         // Drawing the active game object gizmo
         Map<std::string, StaticMesh *, std::hash<std::string>>::iterator activeIter = std::find_if(
                 meshObjectList.begin(), meshObjectList.end(),
@@ -1772,6 +1815,10 @@ namespace rn {
             texture = iter->second;
         }
         return texture;
+    }
+
+    PbrMaterial *Graphics::RegisterPbrMaterial(const std::string &path) {
+        return PbrImpl::GetInstance(&mRendererContext)->LoadTexture(path);
     }
 
     void Graphics::CreateDefaultTexture(const std::string &defaultTexturePath) {

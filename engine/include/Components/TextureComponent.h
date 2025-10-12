@@ -13,17 +13,21 @@ namespace vk {
     protected:
         std::string textureId;
         rn::Texture *mTexture;
+        rn::PbrMaterial *mMaterial;
         rn::RendererContext *mCtx;
+        rn::MATERIAL_TYPE mMaterialType;
 
     public:
         TextureComponent(GameObject *ownerGameObject, const std::string &textureId,
-                         rn::RendererContext *ctx);
+                         rn::RendererContext *ctx, rn::MATERIAL_TYPE materialType);
 
         std::string GetTextureId() const { return textureId; };
 
         virtual void BeginPlay() override;
 
         virtual void Tick(float deltaTime) override;
+
+        rn::MATERIAL_TYPE GetMaterialType() const { return mMaterialType; }
     };
 }
 #endif //SMALLVKENGINE_TEXTURECOMPONENT_H

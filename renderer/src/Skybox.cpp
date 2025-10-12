@@ -139,7 +139,7 @@ namespace rn {
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.layout = mLayout;
         pipelineCreateInfo.subpass = 0;
-        pipelineCreateInfo.renderPass = mCtx->offScreenRenderPass;
+        pipelineCreateInfo.renderPass = *mCtx->offScreenRenderPass;
         pipelineCreateInfo.stageCount = shaderStages.size();
         pipelineCreateInfo.pStages = shaderStages.data();
         pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
@@ -239,7 +239,7 @@ namespace rn {
                 20, 21, 22, 22, 23, 20   // bottom
         };
         std::string empty;
-        mCubeMesh = new StaticMesh(*mCtx, skyboxVertices, skyboxIndices, -1, empty, false);
+        mCubeMesh = new StaticMesh(*mCtx, skyboxVertices, skyboxIndices, -1, empty, false, MATERIAL_TYPE::PHONG);
 
     }
 
@@ -297,31 +297,29 @@ namespace rn {
         // Creating the image view with 6 layers.
         Utility::CreateImageView(mCtx->logicalDevice, mSkyBoxImage, VK_FORMAT_R8G8B8A8_SRGB, mSkyBoxImageView,
                                  VK_IMAGE_ASPECT_COLOR_BIT, 0, 6, VK_IMAGE_VIEW_TYPE_CUBE);
-        mStagingBuffers.resize(6);
-        mStagingBufferMemory.resize(6);
-
-
         for (int i = 0; i < 6; i++) {
+            VkBuffer stagingBuffer{};
+            VkDeviceMemory stagingBufferMemory{};
             VkDeviceSize SkyBoxImageSize = 4 * faceSize * faceSize;
 //            unsigned char *resizeData = new unsigned char[4 * SKY_BOX_RESOLUTION * SKY_BOX_RESOLUTION]{};
 //            stbir_resize_uint8_linear(reinterpret_cast<unsigned char *>(imageData), faceSize, faceSize, 0, resizeData,
 //                                      SKY_BOX_RESOLUTION, SKY_BOX_RESOLUTION,
 //                                      0, STBIR_RGBA);
 
-            Utility::CreateBuffer(*mCtx, mStagingBuffers[i], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, mStagingBufferMemory[i],
+            Utility::CreateBuffer(*mCtx, stagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBufferMemory,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                   4 * faceSize * faceSize, "Sky Box Buffer");
             void *data;
-            vkMapMemory(mCtx->logicalDevice, mStagingBufferMemory[i], 0, SkyBoxImageSize, 0, &data);
+            vkMapMemory(mCtx->logicalDevice, stagingBufferMemory, 0, SkyBoxImageSize, 0, &data);
             memcpy(data, cubeFaces[i], SkyBoxImageSize);
-            vkUnmapMemory(mCtx->logicalDevice, mStagingBufferMemory[i]);
+            vkUnmapMemory(mCtx->logicalDevice, stagingBufferMemory);
             //   delete[] resizeData;
             delete[] cubeFaces[i];
 
-            Utility::CopyBufferToImage(*mCtx, mStagingBuffers[i], mSkyBoxImage, faceSize, faceSize,
+            Utility::CopyBufferToImage(*mCtx, stagingBuffer, mSkyBoxImage, faceSize, faceSize,
                                        VK_IMAGE_ASPECT_COLOR_BIT, i);
-            vkDestroyBuffer(mCtx->logicalDevice, mStagingBuffers[i], nullptr);
-            vkFreeMemory(mCtx->logicalDevice, mStagingBufferMemory[i], nullptr);
+            vkDestroyBuffer(mCtx->logicalDevice, stagingBuffer, nullptr);
+            vkFreeMemory(mCtx->logicalDevice, stagingBufferMemory, nullptr);
         }
         Utility::TransitionImageLayout(*mCtx, mSkyBoxImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, 6, 0);
@@ -361,5 +359,18 @@ namespace rn {
         writeDescriptorSet.pImageInfo = &imageInfo;
 
         vkUpdateDescriptorSets(mCtx->logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
+    }
+
+    Skybox::~Skybox() {
+        delete mCubeMesh;
+        vkDestroySampler(mCtx->logicalDevice, mCubeSampler, nullptr);
+        vkDestroyImageView(mCtx->logicalDevice, mSkyBoxImageView, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mSkyBoxImage, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mSkyBoxImageMemory, nullptr);
+        vkDestroyDescriptorPool(mCtx->logicalDevice, mDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(mCtx->logicalDevice, mSetLayout, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mLayout, nullptr);
+        vkDestroyPipeline(mCtx->logicalDevice, mPipeline, nullptr);
+
     }
 }

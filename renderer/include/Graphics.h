@@ -24,8 +24,6 @@ namespace rn {
 
         static AXIS activeGizmoAxis;
 
-        static class PbrImpl *mPbr;
-
 #pragma endregion
 #pragma region Instance_and_Validations
         VkInstance mInstance;
@@ -195,6 +193,7 @@ namespace rn {
             mRendererContext.RegisterMesh = &RegisterMeshObject;
             mRendererContext.UpdateViewAndProjectionMatrix = &SetViewProjection;
             mRendererContext.RegisterTexture = &RegisterTexture;
+            mRendererContext.RegisterPbrMaterial = &RegisterPbrMaterial;
             mRendererContext.SetUpAsDirectionalLight = &SetUpDirectionalLight;
             mRendererContext.GetSceneObjectMap = &GetSceneObjectMap;
             mRendererContext.swapChainFormat = mSurfaceFormat.format;
@@ -331,6 +330,8 @@ namespace rn {
 
         void Draw();
 
+        void RenderPbrMesh(std::uint32_t currentImage);
+
         void EndFrame();
 
         void Imgui_vulkan_init();
@@ -368,6 +369,8 @@ namespace rn {
         void CreateTextureDefaultSampler();
 
         static Texture *RegisterTexture(std::string &textureId);
+
+        static PbrMaterial *RegisterPbrMaterial(const std::string &path);
 
         void CreateDefaultTexture(const std::string &defaultTexturePath);
 

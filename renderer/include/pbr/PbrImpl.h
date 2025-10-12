@@ -19,7 +19,7 @@ namespace rn {
         VkPipelineLayout mLayout{};
         VkDescriptorSetLayout mSetLayout{};
         VkCommandBuffer mSecondaryCommandBuffer{};
-        List<PbrMaterial *> mPbrMaterialList{};
+        Map<std::string, class PbrMaterial *, std::hash<std::string>> mMaterialMap{};
         VkPushConstantRange mModelRange{};
 
         glm::vec3 fallbackColor{1.0, 1.0, 1.0};
@@ -32,20 +32,28 @@ namespace rn {
 
         void CreatePipeline();
 
-        void BeginFrame(int currentImageIndex);
+        void BeginFrame(std::uint32_t currentImageIndex);
 
-        void BindPipelineAndDrawPbrScene();
+        void BindPipelineAndDrawPbrMesh(StaticMesh *mesh);
 
         void EndFrame();
 
-        void CreateTestObject();
+        void CreateDefaultTexture();
 
-    public:
         explicit PbrImpl(RendererContext *ctx);
 
-        void Render(int currentImageIndex);
+        static PbrImpl *instance;
+    public:
+
+        static PbrImpl *GetInstance(RendererContext *ctx);
+
+        void Render(std::uint32_t currentImageIndex, StaticMesh *mesh);
 
         const VkCommandBuffer &GetSecondaryCommandBuffer() const { return mSecondaryCommandBuffer; };
+
+        void CleanUp();
+
+        PbrMaterial * LoadTexture(const std::string &texturePath);
     };
 }
 #endif //SMALLVKENGINE_PBRIMPL_H

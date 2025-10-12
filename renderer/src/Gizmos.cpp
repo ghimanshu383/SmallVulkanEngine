@@ -165,7 +165,7 @@ namespace rn {
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineCreateInfo.renderPass = mCtx->offScreenRenderPass;
+        pipelineCreateInfo.renderPass = *mCtx->offScreenRenderPass;
         pipelineCreateInfo.subpass = 0;
         pipelineCreateInfo.layout =
                 type == TOPOLOGY_TYPE::LINES ? mLayoutLines : type == TOPOLOGY_TYPE::TRIANGLES ? mLayoutTriangles
@@ -196,95 +196,95 @@ namespace rn {
     void Gizmos::SetUpMesh() {
         List<Vertex> gizmoVertices = {
                 // X Axis (Red)
-                {{0.0f,             0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{AXIS_LENGTH,      0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
+                {{0.0f,             0.0f,             0.0f},                {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{AXIS_LENGTH,      0.0f,             0.0f},                {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
 
                 // Y Axis (Green)
-                {{0.0f,             0.0f,             0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{0.0f,             AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
+                {{0.0f,             0.0f,             0.0f},                {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{0.0f,             AXIS_LENGTH,      0.0f},                {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
 
                 // Z Axis (Blue)
-                {{0.0f,             0.0f,             0.0f},             {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
-                {{0.0f,             0.0f,             -AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
+                {{0.0f,             0.0f,             0.0f},                {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // start
+                {{0.0f,             0.0f,             -AXIS_LENGTH},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // end
 
                 // Triangles on Top of the lines;
                 // tip
                 {{AXIS_LENGTH +
-                  ARROW_TIP_LENGTH, 0.0f,             0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                  ARROW_TIP_LENGTH, 0.0f,             0.0f},                {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base upper
-                {{AXIS_LENGTH,      ARROW_BASE_SIZE,  0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{AXIS_LENGTH,      ARROW_BASE_SIZE,  0.0f},                {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base lower
-                {{AXIS_LENGTH,      -ARROW_BASE_SIZE, 0.0f},             {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{AXIS_LENGTH,      -ARROW_BASE_SIZE, 0.0f},                {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 
                 // tip
                 {{0.0f,             AXIS_LENGTH +
-                                    ARROW_TIP_LENGTH, 0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                                    ARROW_TIP_LENGTH, 0.0f},                {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base right
-                {{ARROW_BASE_SIZE,  AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{ARROW_BASE_SIZE,  AXIS_LENGTH,      0.0f},                {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base left
-                {{-ARROW_BASE_SIZE, AXIS_LENGTH,      0.0f},             {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{-ARROW_BASE_SIZE, AXIS_LENGTH,      0.0f},                {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 
                 // tip
                 {{0.0f,             0.0f,             -(AXIS_LENGTH +
-                                                      ARROW_TIP_LENGTH)}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                                                        ARROW_TIP_LENGTH)}, {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base top
-                {{0.0f,             ARROW_BASE_SIZE,  -AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{0.0f,             ARROW_BASE_SIZE,  -AXIS_LENGTH},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
                 // base bottom
-                {{0.0f,             -ARROW_BASE_SIZE, -AXIS_LENGTH},      {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                {{0.0f,             -ARROW_BASE_SIZE, -AXIS_LENGTH},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 
                 // X axis scale cube (Red)
                 {{AXIS_LENGTH -
-                  CUBE_SIZE,        -CUBE_SIZE,       -CUBE_SIZE},       {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        -CUBE_SIZE,       -CUBE_SIZE},          {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH +
-                  CUBE_SIZE,        -CUBE_SIZE,       -CUBE_SIZE},       {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        -CUBE_SIZE,       -CUBE_SIZE},          {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH +
-                  CUBE_SIZE,        CUBE_SIZE,        -CUBE_SIZE},       {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        CUBE_SIZE,        -CUBE_SIZE},          {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH -
-                  CUBE_SIZE,        CUBE_SIZE,        -CUBE_SIZE},       {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        CUBE_SIZE,        -CUBE_SIZE},          {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH -
-                  CUBE_SIZE,        -CUBE_SIZE,       CUBE_SIZE},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        -CUBE_SIZE,       CUBE_SIZE},           {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH +
-                  CUBE_SIZE,        -CUBE_SIZE,       CUBE_SIZE},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        -CUBE_SIZE,       CUBE_SIZE},           {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH +
-                  CUBE_SIZE,        CUBE_SIZE,        CUBE_SIZE},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        CUBE_SIZE,        CUBE_SIZE},           {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
                 {{AXIS_LENGTH -
-                  CUBE_SIZE,        CUBE_SIZE,        CUBE_SIZE},        {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
+                  CUBE_SIZE,        CUBE_SIZE,        CUBE_SIZE},           {1.0f, 0.2f, 0.2f, 1.0f}, {1001.0f, 0},    {0,    0,    1}},
 
                 // Y axis scale cube (Green)
                 {{-CUBE_SIZE,       AXIS_LENGTH -
-                                    CUBE_SIZE,        -CUBE_SIZE},       {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        -CUBE_SIZE},          {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        AXIS_LENGTH -
-                                    CUBE_SIZE,        -CUBE_SIZE},       {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        -CUBE_SIZE},          {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        AXIS_LENGTH +
-                                    CUBE_SIZE,        -CUBE_SIZE},       {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        -CUBE_SIZE},          {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       AXIS_LENGTH +
-                                    CUBE_SIZE,        -CUBE_SIZE},       {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        -CUBE_SIZE},          {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       AXIS_LENGTH -
-                                    CUBE_SIZE,        CUBE_SIZE},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        CUBE_SIZE},           {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        AXIS_LENGTH -
-                                    CUBE_SIZE,        CUBE_SIZE},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        CUBE_SIZE},           {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        AXIS_LENGTH +
-                                    CUBE_SIZE,        CUBE_SIZE},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        CUBE_SIZE},           {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       AXIS_LENGTH +
-                                    CUBE_SIZE,        CUBE_SIZE},        {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
+                                    CUBE_SIZE,        CUBE_SIZE},           {0.2f, 1.0f, 0.2f, 1.0f}, {2002.0f, 0},    {0,    0,    1}},
 
                 // Z axis scale cube (Blue)
                 {{-CUBE_SIZE,       -CUBE_SIZE,       -(AXIS_LENGTH -
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        -CUBE_SIZE,       -(AXIS_LENGTH -
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        CUBE_SIZE,        -(AXIS_LENGTH -
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       CUBE_SIZE,        -(AXIS_LENGTH -
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       -CUBE_SIZE,       -(AXIS_LENGTH +
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        -CUBE_SIZE,       -(AXIS_LENGTH +
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{CUBE_SIZE,        CUBE_SIZE,        -(AXIS_LENGTH +
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
                 {{-CUBE_SIZE,       CUBE_SIZE,        -(AXIS_LENGTH +
-                                                      CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
+                                                        CUBE_SIZE)},        {0.2f, 0.2f, 1.0f, 1.0f}, {3003.0f, 0},    {0,    0,    1}},
 
 
         };
@@ -325,7 +325,7 @@ namespace rn {
         rotationStartIndex = indices.size();
         BuildRotationGizmo(gizmoVertices, indices, AXIS_LENGTH);
         std::string noTex;
-        mTranslateMesh = new StaticMesh(*mCtx, gizmoVertices, indices, 0, noTex, false);
+        mTranslateMesh = new StaticMesh(*mCtx, gizmoVertices, indices, 0, noTex, false, MATERIAL_TYPE::PHONG);
     }
 
     void Gizmos::BuildRotationGizmo(std::vector<Vertex> &verts,

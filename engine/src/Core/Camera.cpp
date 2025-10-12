@@ -36,6 +36,7 @@ namespace vk {
 
         mMainWindow->GetRendererContext()->UpdateViewAndProjectionMatrix({mProjectionMatrix, mViewMatrix});
         mMainWindow->GetRendererContext()->cameraForward = mFront;
+        mMainWindow->GetRendererContext()->cameraPosition = mPosition;
         return true;
     }
 

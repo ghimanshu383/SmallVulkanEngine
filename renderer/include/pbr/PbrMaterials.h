@@ -18,8 +18,6 @@ namespace rn {
         PbrTexture *roughness;
         PbrTexture *ao;
 
-        class StaticMesh *mStaticMesh;
-
         VkDescriptorSetLayout mSetLayout;
         VkDescriptorSet mDescriptorSet{};
         VkDescriptorPool mDescriptorPool{};
@@ -38,12 +36,11 @@ namespace rn {
 
 
     public:
-        explicit PbrMaterial(RendererContext *ctx, VkDescriptorSetLayout setLayout, const std::string &baseTextureLoc,
-                             class StaticMesh *mesh);
+        explicit PbrMaterial(RendererContext *ctx, VkDescriptorSetLayout setLayout, const std::string &baseTextureLoc);
+
+        ~PbrMaterial();
 
         void UpdateUniformBuffersFromGraphicsContext();
-
-        StaticMesh *GetStaticMesh() const { return mStaticMesh; }
 
         const VkDescriptorSet &GetDescriptorSet() const { return mDescriptorSet; }
 

@@ -71,7 +71,7 @@ namespace vk {
                     if (!fileName.empty()) {
                         std::shared_ptr<TextureComponent> textureComponent = std::make_shared<TextureComponent>(
                                 Component::mOwningGameObject, R"(D:\cProjects\SmallVkEngine\textures\colormap.png)",
-                                mOwningGameObject->GetScene()->GetRendererContext());
+                                mOwningGameObject->GetScene()->GetRendererContext(), rn::MATERIAL_TYPE::PHONG);
                         textureList.push_back(textureComponent);
                     }
                 }
@@ -122,7 +122,7 @@ namespace vk {
         std::string texId = R"(D:\cProjects\SmallVkEngine\textures\colormap.png)";
         std::shared_ptr<MeshComponent> meshComponent = mOwningGameObject->SpawnComponent<MeshComponent>(
                 std::string{buffer}, vertices,
-                indices, texId, true);
+                indices, true, texId);
         meshList.push_back(meshComponent);
     }
 

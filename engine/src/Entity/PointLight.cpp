@@ -61,8 +61,9 @@ namespace vk {
             };
 
             std::string meshId = &"Point Light Mesh "[mLightId];
-            SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx);
-            SpawnComponent<MeshComponent>(meshId, cubeVertices, cubeIndices, "", true);
+            SpawnComponent<TextureComponent>(R"(D:\cProjects\SmallVkEngine\textures\default.jpg)", mCtx,
+                                             rn::MATERIAL_TYPE::PHONG);
+            SpawnComponent<MeshComponent>(meshId, cubeVertices, cubeIndices, true);
         }
         GameObject::BeginPlay();
     }

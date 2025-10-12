@@ -15,9 +15,11 @@
 
 namespace vk {
     MeshComponent::MeshComponent(vk::GameObject *gameObject, const std::string &id, List<rn::Vertex> &vertices,
-                                 List<std::uint32_t> &indices, std::string textureId, bool calculateNormals)
+                                 List<std::uint32_t> &indices,
+                                 bool calculateNormals,
+                                 const std::string &modelTexturePath)
             : Component(gameObject, id), mVertexList{vertices}, mIndexList{indices},
-              mTextureId{std::move(textureId)}, mCalculateNormals{calculateNormals} {
+              mCalculateNormals{calculateNormals}, mStaticMesh{nullptr}, mModelTexturePath(modelTexturePath) {
     }
 
     MeshComponent::~MeshComponent() {
@@ -26,17 +28,19 @@ namespace vk {
 
     void MeshComponent::BeginPlay() {
         Component::BeginPlay();
-        if (mTextureId.empty()) {
-            LOG_WARN("No Texture Id provided for {} Checking in the game object for Texture Comp", id.c_str());
-            std::shared_ptr<TextureComponent> textureComponent = mOwningGameObject->GetComponentType<TextureComponent>();
-            if (textureComponent != nullptr) {
-                mTextureId = textureComponent->GetTextureId();
-            } else {
-                LOG_WARN("No Texture Component found in Game Object for {} .. Falling to default Texture", id.c_str());
-            }
+        rn::MATERIAL_TYPE materialType = rn::MATERIAL_TYPE::PHONG;
+        std::string textureId = mModelTexturePath.empty() ? rn::BASE_PHONG_MATERIAL_ID : mModelTexturePath;
+
+        std::shared_ptr<TextureComponent> textureComponent = mOwningGameObject->GetComponentType<TextureComponent>();
+        if (textureComponent != nullptr) {
+            materialType = textureComponent->GetMaterialType();
+            textureId = textureComponent->GetTextureId();
+        } else {
+            LOG_WARN("No Texture Component found in Game Object for {} .. Falling to default Texture", id.c_str());
         }
+
         mStaticMesh = new rn::StaticMesh{*Component::ctx, mVertexList, mIndexList, mOwningGameObject->GetPickId(),
-                                         mTextureId, mCalculateNormals};
+                                         textureId, mCalculateNormals, materialType};
         // Register the object with the Rendering Context for the Graphics context
         std::shared_ptr<TransformComponent> transformComponent = mOwningGameObject->GetComponentType<TransformComponent>();
         if (transformComponent != nullptr) {

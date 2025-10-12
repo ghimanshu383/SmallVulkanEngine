@@ -19,8 +19,6 @@ namespace rn {
         VkImage mSkyBoxImage{};
         VkImageView mSkyBoxImageView{};
         VkDeviceMemory mSkyBoxImageMemory{};
-        List<VkBuffer> mStagingBuffers{};
-        List<VkDeviceMemory> mStagingBufferMemory{};
         VkSampler mCubeSampler{};
 
         class StaticMesh *mCubeMesh;
@@ -39,6 +37,8 @@ namespace rn {
         explicit Skybox(RendererContext *ctx);
 
         void RenderSkyBox();
+
+        ~Skybox();
 
     };
 }

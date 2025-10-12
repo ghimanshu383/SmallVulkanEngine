@@ -1,7 +1,9 @@
 //
 // Created by ghima on 11-10-2025.
 //
+#define GLM_ENABLE_EXPERIMENTAL
 
+#include <glm/gtx/string_cast.hpp>
 #include "Utility.h"
 #include "pbr/PbrMaterials.h"
 #include "pbr/PbrTexture.h"
@@ -10,12 +12,11 @@
 
 namespace rn {
     PbrMaterial::PbrMaterial(RendererContext *ctx, VkDescriptorSetLayout setLayout,
-                             const std::string &baseTextureLoc, StaticMesh *mesh) : mCtx{ctx}, albedo{nullptr},
-                                                                                    normal{nullptr},
-                                                                                    metallic{nullptr},
-                                                                                    roughness{nullptr}, ao{nullptr},
-                                                                                    mSetLayout{setLayout},
-                                                                                    mStaticMesh{mesh} {
+                             const std::string &baseTextureLoc) : mCtx{ctx}, albedo{nullptr},
+                                                                  normal{nullptr},
+                                                                  metallic{nullptr},
+                                                                  roughness{nullptr}, ao{nullptr},
+                                                                  mSetLayout{setLayout} {
         albedo = new PbrTexture(ctx, baseTextureLoc + "\\albedo.png");
         normal = new PbrTexture(ctx, baseTextureLoc + "\\normal.png");
         metallic = new PbrTexture(ctx, baseTextureLoc + "\\metallic.png");
@@ -26,7 +27,6 @@ namespace rn {
         CreateUniformBuffersAndBindToDescriptorSets();
 
     }
-
 
     void PbrMaterial::CreateDescriptorPoolAndSets() {
         // Creating a descriptor Pool for the sets;
@@ -66,7 +66,7 @@ namespace rn {
     void PbrMaterial::CreateUniformBuffersAndBindToDescriptorSets() {
         Utility::CreateBuffer(*mCtx, mViewProjectionBuffer, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, mViewProjectionMemory,
                               (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
-                              sizeof(ViewProjection), "Pbr View Projection Buffer");
+                              sizeof(CameraUBO), "Pbr View Projection Buffer");
         Utility::CreateBuffer(*mCtx, mDiffuseLightBuffer, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, mDiffuseLightMemory,
                               (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
                               sizeof(OmniDirectionalInfo), "Pbr Diffuse Light Buffer");
@@ -76,7 +76,7 @@ namespace rn {
 
         VkDescriptorBufferInfo viewProjectionBufferInfo{};
         viewProjectionBufferInfo.offset = 0;
-        viewProjectionBufferInfo.range = sizeof(ViewProjection);
+        viewProjectionBufferInfo.range = sizeof(CameraUBO);
         viewProjectionBufferInfo.buffer = mViewProjectionBuffer;
 
         VkDescriptorBufferInfo diffuseLightBufferInfo{};
@@ -116,12 +116,12 @@ namespace rn {
         pointLightBufferWrite.dstSet = mDescriptorSet;
         pointLightBufferWrite.pBufferInfo = &pointLightBufferInfo;
 
-
         VkWriteDescriptorSet albedoWrite = albedo->GetWriteSamplerDescriptorForTexture(mDescriptorSet, 3, 0);
         VkWriteDescriptorSet normalWrite = normal->GetWriteSamplerDescriptorForTexture(mDescriptorSet, 3, 1);
         VkWriteDescriptorSet metallicWrite = metallic->GetWriteSamplerDescriptorForTexture(mDescriptorSet, 3, 2);
         VkWriteDescriptorSet roughnessWrite = roughness->GetWriteSamplerDescriptorForTexture(mDescriptorSet, 3, 3);
         VkWriteDescriptorSet aoWrite = ao->GetWriteSamplerDescriptorForTexture(mDescriptorSet, 3, 4);
+
 
         List<VkWriteDescriptorSet> writes{viewProjectionBufferWrite, diffuseLightBufferWrite, pointLightBufferWrite,
                                           albedoWrite, normalWrite, metallicWrite, roughnessWrite, aoWrite};
@@ -129,10 +129,13 @@ namespace rn {
     }
 
     void PbrMaterial::UpdateUniformBuffersFromGraphicsContext() {
+
         // updating the view projection Buffers
         void *data;
-        vkMapMemory(mCtx->logicalDevice, mViewProjectionMemory, 0, sizeof(ViewProjection), 0, &data);
-        memcpy(data, mCtx->GetViewProjectionMatrix(), sizeof(ViewProjection));
+        CameraUBO cameraUbo{mCtx->GetViewProjectionMatrix()->projection, mCtx->GetViewProjectionMatrix()->view,
+                            {mCtx->cameraPosition, 1.0}};
+        vkMapMemory(mCtx->logicalDevice, mViewProjectionMemory, 0, sizeof(CameraUBO), 0, &data);
+        memcpy(data, &cameraUbo, sizeof(CameraUBO));
         vkUnmapMemory(mCtx->logicalDevice, mViewProjectionMemory);
 
         // updating the diffuse light buffers;
@@ -145,6 +148,23 @@ namespace rn {
         memcpy(data, &mCtx->pointLight->GetPointLightUBO(), sizeof(PointLightUBO));
         vkUnmapMemory(mCtx->logicalDevice, mPointLightMemory);
 
+    }
+
+    PbrMaterial::~PbrMaterial() {
+        vkDestroyDescriptorPool(mCtx->logicalDevice, mDescriptorPool, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, mPointLightBuffer, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, mDiffuseLightBuffer, nullptr);
+        vkDestroyBuffer(mCtx->logicalDevice, mViewProjectionBuffer, nullptr);
+
+        vkFreeMemory(mCtx->logicalDevice, mPointLightMemory, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mDiffuseLightMemory, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mViewProjectionMemory, nullptr);
+
+        delete albedo;
+        delete normal;
+        delete metallic;
+        delete roughness;
+        delete ao;
     }
 
 }

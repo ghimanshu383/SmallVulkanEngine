@@ -13,11 +13,21 @@
 #include "StaticMesh.h"
 
 namespace rn {
+    PbrImpl *PbrImpl::instance = nullptr;
+
     PbrImpl::PbrImpl(RendererContext *ctx) : mCtx{ctx} {
         CreateDescriptorLayout();
         CreatePipeline();
         AllocateSecondaryCommandBuffer();
-        CreateTestObject();
+        CreateDefaultTexture();
+    }
+
+    PbrImpl *PbrImpl::GetInstance(RendererContext *ctx) {
+        if (instance == nullptr) {
+            instance = new PbrImpl(ctx);
+        }
+
+        return instance;
     }
 
     void PbrImpl::CreatePipeline() {
@@ -148,7 +158,7 @@ namespace rn {
         dynamicStateCreateInfo.pDynamicStates = dynamicStates.data();
 
 
-        mModelRange.size = sizeof(glm::mat4);
+        mModelRange.size = sizeof(ModelUBO);
         mModelRange.offset = 0;
         mModelRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -166,7 +176,7 @@ namespace rn {
         // Creating pipeline for the pbr.
         VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineCreateInfo.renderPass = mCtx->offScreenRenderPass;
+        pipelineCreateInfo.renderPass = *mCtx->offScreenRenderPass;
         pipelineCreateInfo.subpass = 0;
         pipelineCreateInfo.layout = mLayout;
         pipelineCreateInfo.stageCount = shaderStages.size();
@@ -185,6 +195,10 @@ namespace rn {
                                   "failed to create the pipeline for the pbr ");
         vkDestroyShaderModule(mCtx->logicalDevice, vertexModule, nullptr);
         vkDestroyShaderModule(mCtx->logicalDevice, fragModule, nullptr);
+        VkRenderPass mPbrPipelineRenderPassHandle = pipelineCreateInfo.renderPass;
+        uint32_t mPbrPipelineSubpass = pipelineCreateInfo.subpass;
+        printf("PBR pipeline created for renderPass %p subpass %u\n", (void *) mPbrPipelineRenderPassHandle,
+               mPbrPipelineSubpass);
     }
 
     void PbrImpl::AllocateSecondaryCommandBuffer() {
@@ -240,10 +254,10 @@ namespace rn {
                 "Failed to create the descriptor set layout for the pbr");
     }
 
-    void PbrImpl::BeginFrame(int currentImageIndex) {
+    void PbrImpl::BeginFrame(std::uint32_t currentImageIndex) {
         VkCommandBufferInheritanceInfo info{};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-        info.renderPass = mCtx->offScreenRenderPass;
+        info.renderPass = *mCtx->offScreenRenderPass;
         info.subpass = 0;
         info.framebuffer = mCtx->offScreenFrameBuffers->at(currentImageIndex);
 
@@ -257,81 +271,88 @@ namespace rn {
     }
 
 
-    void PbrImpl::BindPipelineAndDrawPbrScene() {
-        vkCmdBindPipeline(mSecondaryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
+    void PbrImpl::BindPipelineAndDrawPbrMesh(StaticMesh *mesh) {
+        PbrMaterial *material;
+        Map<std::string, PbrMaterial *, std::hash<std::string>>::iterator iter = std::find_if(
+                mMaterialMap.begin(),
+                mMaterialMap.end(),
+                [&](const std::pair<std::string, PbrMaterial *> &entry) -> bool {
+                    return mesh->GetTextureId() ==
+                           entry.first;
+                });
+        if (iter == mMaterialMap.end()) {
+            material = mMaterialMap.at(BASE_PBR_MATERIAL_ID);
+        } else {
+            material = iter->second;
+        }
+
+        vkCmdBindPipeline(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
         VkViewport viewport = {0, 0, static_cast<float>(mCtx->viewportExtends.width),
-                               static_cast<float>(mCtx->viewportExtends.height)};
+                               static_cast<float>(mCtx->viewportExtends.height), 0, 1};
         VkRect2D scissors = {
                 0, 0,
                 mCtx->viewportExtends.width, mCtx->viewportExtends.height
         };
-        vkCmdSetViewport(mSecondaryCommandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(mSecondaryCommandBuffer, 0, 1, &scissors);
+        vkCmdSetViewport(mCtx->mainCommandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(mCtx->mainCommandBuffer, 0, 1, &scissors);
 
-        for (auto &i: mPbrMaterialList) {
-            i->UpdateUniformBuffersFromGraphicsContext();
-            VkDeviceSize offset{};
-            VkBuffer vertexBuffer = i->GetStaticMesh()->GetVertexBuffer();
-            vkCmdBindVertexBuffers(mSecondaryCommandBuffer, 0, 1, &vertexBuffer, &offset);
-            vkCmdBindIndexBuffer(mSecondaryCommandBuffer, i->GetStaticMesh()->GetIndexBuffer(), offset,
-                                 VK_INDEX_TYPE_UINT32);
-            vkCmdBindDescriptorSets(mSecondaryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mLayout, 0, 1,
-                                    &i->GetDescriptorSet(), 0,
-                                    nullptr);
-            vkCmdPushConstants(mSecondaryCommandBuffer, mLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
-                               &i->GetStaticMesh()->GetModelMatrix());
-            vkCmdDrawIndexed(mSecondaryCommandBuffer,
-                             i->GetStaticMesh()->GetStaticMeshIndicesCount(),
-                             1, 0, 0, 0);
-        }
+        material->UpdateUniformBuffersFromGraphicsContext();
+        VkDeviceSize offset{};
+        VkBuffer vertexBuffer = mesh->GetVertexBuffer();
+        vkCmdBindVertexBuffers(mCtx->mainCommandBuffer, 0, 1, &vertexBuffer, &offset);
+        vkCmdBindIndexBuffer(mCtx->mainCommandBuffer, mesh->GetIndexBuffer(), offset,
+                             VK_INDEX_TYPE_UINT32);
+        vkCmdBindDescriptorSets(mCtx->mainCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mLayout, 0, 1,
+                                &material->GetDescriptorSet(), 0,
+                                nullptr);
+        ModelUBO modelUbo{mesh->GetModelMatrix(), mesh->GetPickId()};
+        vkCmdPushConstants(mCtx->mainCommandBuffer, mLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelUBO),
+                           &modelUbo);
+        vkCmdDrawIndexed(mCtx->mainCommandBuffer,
+                         mesh->GetStaticMeshIndicesCount(),
+                         1, 0, 0, 0);
     }
 
     void PbrImpl::EndFrame() {
         vkEndCommandBuffer(mSecondaryCommandBuffer);
     }
 
-    void PbrImpl::Render(int currentImageIndex) {
+    void PbrImpl::Render(std::uint32_t currentImageIndex, StaticMesh *mesh) {
         BeginFrame(currentImageIndex);
-        BindPipelineAndDrawPbrScene();
+        BindPipelineAndDrawPbrMesh(mesh);
         EndFrame();
     }
 
-    void PbrImpl::CreateTestObject() {
+    void PbrImpl::CreateDefaultTexture() {
 
-        List<rn::Vertex> cubeVertices = {
-                // Front face (Z+)
-                {{-0.5f, -0.5f, 0.5f},  {1, 0, 0, 1}, {0, 0}},
-                {{0.5f,  -0.5f, 0.5f},  {0, 1, 0, 1}, {1, 0}},
-                {{0.5f,  0.5f,  0.5f},  {0, 0, 1, 1}, {1, 1}},
-                {{-0.5f, 0.5f,  0.5f},  {1, 1, 0, 1}, {0, 1}},
+        PbrMaterial *defaultMaterial = new PbrMaterial{mCtx, mSetLayout, BASE_PBR_MATERIAL_ID};
+        mMaterialMap.insert({BASE_PBR_MATERIAL_ID, defaultMaterial});
+    }
 
-                // Back face (Z-)
-                {{-0.5f, -0.5f, -0.5f}, {1, 0, 1, 1}, {1, 0}},
-                {{0.5f,  -0.5f, -0.5f}, {0, 1, 1, 1}, {0, 0}},
-                {{0.5f,  0.5f,  -0.5f}, {1, 1, 1, 1}, {0, 1}},
-                {{-0.5f, 0.5f,  -0.5f}, {0, 0, 0, 1}, {1, 1}},
-        };
+    void PbrImpl::CleanUp() {
+        auto iter = mMaterialMap.begin();
+        while (iter != mMaterialMap.end()) {
+            auto material = iter->second;
+            delete material;
+            iter++;
+        }
+        vkDestroyPipeline(mCtx->logicalDevice, mPipeline, nullptr);
+        vkDestroyDescriptorSetLayout(mCtx->logicalDevice, mSetLayout, nullptr);
+        vkDestroyPipelineLayout(mCtx->logicalDevice, mLayout, nullptr);
+        delete instance;
+    }
 
-        List<std::uint32_t> cubeIndices = {
-                // Front face
-                0, 1, 2, 0, 2, 3,
-                // Back face
-                4, 6, 5, 4, 7, 6,
-                // Left face
-                4, 3, 7, 4, 0, 3,
-                // Right face
-                1, 5, 6, 1, 6, 2,
-                // Top face
-                3, 2, 6, 3, 6, 7,
-                // Bottom face
-                4, 5, 1, 4, 1, 0
-        };
-        std::string texture = "";
-        StaticMesh *testMesh = new StaticMesh{*mCtx, cubeVertices, cubeIndices, 1, texture, true};
-        testMesh->SetModelMatrixTranslatePos({0, 1, -2});
-        PbrMaterial *testMaterial = new PbrMaterial{mCtx, mSetLayout,
-                                                    "D:\\cProjects\\SmallVkEngine\\PbrTextures\\simpleCube", testMesh};
-        mPbrMaterialList.emplace_back(testMaterial);
+    PbrMaterial * PbrImpl::LoadTexture(const std::string &texturePath) {
+        Map<std::string, PbrMaterial *, std::hash<std::string>>::iterator iter = mMaterialMap.find(texturePath);
+        if (iter == mMaterialMap.end()) {
+            auto material = new PbrMaterial(mCtx, mSetLayout, texturePath);
+            mMaterialMap.insert({texturePath, material});
+            return material;
+        } else {
+            LOG_WARN("The Material already Exists");
+            return iter->second;
+        }
+
     }
 }
 

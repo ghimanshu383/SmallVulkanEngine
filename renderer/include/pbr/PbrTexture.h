@@ -24,7 +24,10 @@ namespace rn {
     public:
         explicit PbrTexture(RendererContext *ctx, const std::string &fileName);
 
-        VkWriteDescriptorSet GetWriteSamplerDescriptorForTexture(VkDescriptorSet descriptorSet, int binding, int elementIndex);
+        ~PbrTexture();
+
+        VkWriteDescriptorSet
+        GetWriteSamplerDescriptorForTexture(VkDescriptorSet descriptorSet, int binding, int elementIndex);
     };
 }
 #endif //SMALLVKENGINE_PBRTEXTURE_H

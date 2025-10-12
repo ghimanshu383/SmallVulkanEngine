@@ -22,6 +22,8 @@ namespace rn {
     const std::uint32_t MAX_POINT_LIGHTS = 10;
     const std::uint32_t SHADOW_MAP_SIZE = 1024;
     const std::uint32_t SKY_BOX_RESOLUTION = 1024;
+    const std::string BASE_PBR_MATERIAL_ID = R"(D:\cProjects\SmallVkEngine\PbrTextures\default)";
+    const std::string BASE_PHONG_MATERIAL_ID = R"(D:\cProjects\SmallVkEngine\textures\default.jpg)";
 
     enum class AXIS {
         NONE = 0,
@@ -36,6 +38,10 @@ namespace rn {
         SCALE
     };
 
+    enum class MATERIAL_TYPE {
+        PBR,
+        PHONG
+    };
     struct Vertex {
         glm::vec3 pos;
         glm::vec4 color;
@@ -49,6 +55,12 @@ namespace rn {
     struct ModelUBO {
         glm::mat4 model;
         std::uint32_t pickId;
+    };
+
+    struct alignas(16) CameraUBO {
+        glm::mat4 projection;
+        glm::mat4 view;
+        glm::vec4 cameraPos;
     };
 
     struct ActiveGizmoAxis {
@@ -103,7 +115,7 @@ namespace rn {
         VkQueue graphicsQueue;
         VkQueue presentationQueue;
         std::uint32_t graphicsQueueIndex;
-        VkRenderPass offScreenRenderPass;
+        VkRenderPass *offScreenRenderPass;
         VkDescriptorPool samplerDescriptorPool;
         VkDescriptorSetLayout samplerDescriptorSetLayout;
         VkDescriptorSet *viewProjectionDescriptorSet;
@@ -127,6 +139,7 @@ namespace rn {
         VkExtent2D viewportExtends;
         ImVec2 viewportPos;
         glm::vec3 cameraForward;
+        glm::vec3 cameraPosition;
         bool beginGizmoDrag = false;
 
         size_t currentImageIndex;
@@ -137,6 +150,8 @@ namespace rn {
         Map<std::string, class StaticMesh *, std::hash<std::string>> *(*GetSceneObjectMap)();
 
         class Texture *(*RegisterTexture)(std::string &texturePathId);
+
+        class PbrMaterial *(*RegisterPbrMaterial)(const std::string &path);
 
         void (*UpdateViewAndProjectionMatrix)(ViewProjection &&viewProjection);
 

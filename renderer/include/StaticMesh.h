@@ -21,6 +21,7 @@ namespace rn {
         VkDeviceMemory mIndexBufferMemory{};
         RendererContext mRenderContext{};
         std::string mTextureId;
+        MATERIAL_TYPE mMaterialType;
         glm::mat4 mModelMatrix{1};
         bool mCalculateNormals;
 
@@ -29,7 +30,7 @@ namespace rn {
     public:
         StaticMesh(RendererContext &ctx, List<Vertex> &Vertices, List<std::uint32_t> &indices, std::uint32_t pickId,
                    std::string &textureId,
-                   bool calculateNormals);
+                   bool calculateNormals, MATERIAL_TYPE materialType);
 
         ~StaticMesh();
 
@@ -83,6 +84,8 @@ namespace rn {
         List<Vertex> &GetVertexList() { return mVertList; };
 
         std::uint32_t GetPickId() const { return mPickId; }
+
+        const MATERIAL_TYPE GetMaterialType() const { return mMaterialType; }
     };
 }
 #endif //SMALLVKENGINE_STATICMESH_H

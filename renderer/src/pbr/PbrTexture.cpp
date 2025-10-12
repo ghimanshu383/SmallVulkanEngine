@@ -27,11 +27,11 @@ namespace rn {
         // Creating the Image
         mTextureImage = Utility::CreateImage("Pbr Texture Image", mCtx->physicalDevice, mCtx->logicalDevice, width,
                                              height,
-                                             VK_FORMAT_R8G8B8A8_SNORM, VK_IMAGE_TILING_OPTIMAL,
+                                             VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
                                              VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                              mTextureImageMemory);
-        Utility::CreateImageView(mCtx->logicalDevice, mTextureImage, VK_FORMAT_R8G8B8A8_SNORM, mTextureImageView,
+        Utility::CreateImageView(mCtx->logicalDevice, mTextureImage, VK_FORMAT_R8G8B8A8_UNORM, mTextureImageView,
                                  VK_IMAGE_ASPECT_COLOR_BIT);
         Utility::TransitionImageLayout(*mCtx, mTextureImage, VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -86,5 +86,12 @@ namespace rn {
         mTextureImageInfo.sampler = mTextureImageSampler;
         mTextureImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         mTextureImageInfo.imageView = mTextureImageView;
+    }
+
+    PbrTexture::~PbrTexture() {
+        vkDestroySampler(mCtx->logicalDevice, mTextureImageSampler, nullptr);
+        vkDestroyImageView(mCtx->logicalDevice, mTextureImageView, nullptr);
+        vkDestroyImage(mCtx->logicalDevice, mTextureImage, nullptr);
+        vkFreeMemory(mCtx->logicalDevice, mTextureImageMemory, nullptr);
     }
 }
