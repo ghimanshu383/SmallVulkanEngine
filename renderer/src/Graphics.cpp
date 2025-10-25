@@ -13,6 +13,7 @@
 #include "Gizmos.h"
 #include "SkyBox.h"
 #include "pbr/PbrImpl.h"
+#include "foundation/core_memory_service.h"
 
 
 namespace rn {
@@ -97,6 +98,7 @@ namespace rn {
     }
 
     void Graphics::InitVulkan() {
+        MemoryService::GetInstance()->init(0, rMega(4));
         CreateInstance();
         GetWindowSurface();
         PickPhysicalDeviceAndCreateLogicalDevice();
@@ -222,6 +224,7 @@ namespace rn {
         vkDestroyDevice(mDevices.logicalDevice, nullptr);
         vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
         vkDestroyInstance(mInstance, nullptr);
+        MemoryService::GetInstance()->shutdown();
     }
 
 #pragma endregion

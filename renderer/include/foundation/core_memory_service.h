@@ -19,12 +19,17 @@ namespace rn {
 
         LinearAllocator *GetScratchAllocator() { return m_scratchAllocator; }
 
+        static MemoryService *GetInstance();
+
     private:
+        MemoryService();
+
+        ~MemoryService();
+
+        static MemoryService *m_instance;
         HeapAllocator *m_systemAllocator = nullptr;
         LinearAllocator *m_scratchAllocator = nullptr;
         void *m_scratchPtr = nullptr;
     };
-
-    extern MemoryService g_memoryService;
 }
 #endif //SMALLVKENGINE_CORE_MEMORY_SERVICE_H

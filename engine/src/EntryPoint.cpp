@@ -8,6 +8,8 @@
 #include "Core/Constants.h"
 #include "Core/Logger.h"
 #include "foundation/core_assert.h"
+#include "foundation/core_array.h"
+#include "foundation/core_memory_service.h"
 
 void PrintSystemInformation() {
 #if PLATFORM_WINDOWS
@@ -47,6 +49,19 @@ int main() {
                                                                                   vk::Constants::WINDOW_HEIGHT,
                                                                                   "Small Vulkan Engine");
     setupAssertionForEngineLib();
-    TH_CHECK(1 == 3, "This is a assert test");
+    // Testing the Base Array;
+    rn::Array<std::string> names;
+    names.init(rn::MemoryService::GetInstance()->GetSystemAllocator(), 2);
+
+    names.push("Kratos");
+    names.push("Raavan");
+    names.push("Hanuman");
+    names.push("Karna");
+
+    TH_LOG_INFO(std::to_string(names.getCapacityInBytes()));
+    TH_LOG_INFO(std::to_string(names.getSizeInBytes()));
+    TH_LOG_INFO( names.front());
+    TH_LOG_INFO(names.back());
+
     mainWindow->RenderWindow();
 }

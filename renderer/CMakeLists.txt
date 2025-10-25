@@ -58,6 +58,8 @@ add_library(${RENDERER} STATIC
         src/foundation/core_heap_allocator.cpp
         include/foundation/core_memory_service.h
         src/foundation/core_memory_service.cpp
+        src/foundation/core_assert.cpp
+        include/foundation/core_array.h
 )
 
 target_include_directories(${RENDERER} PUBLIC

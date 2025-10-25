@@ -38,12 +38,11 @@ namespace rn {
 #if PLATFORM_WINDOWS
         _aligned_free(ptr);
 #else
-        free(ptr)
+        free(ptr);
 #endif
     }
-
-#endif //SMALLVKENGINE_CORE_MEMORY_H
 }
+#endif //SMALLVKENGINE_CORE_MEMORY_H
 
 
 #define ALIGN_16    16

@@ -5,32 +5,22 @@
 #ifndef SMALLVKENGINE_CORE_ASSERT_H
 #define SMALLVKENGINE_CORE_ASSERT_H
 
-#include "precomp.h"
+#include "Utility.h"
 
 namespace rn {
-    void DefaultHandler(const char *condition, const char *message, const char *file, int line) {
-        LOG_ERROR("{} ( {} : {}) Assertion Failed for {}", message, file, line, condition);
-        TH_DEBUG_BREAK;
-    }
+    void DefaultHandler(const char *condition, const char *message, const char *file, int line);
 
     using AssertHandler = std::function<void(const char *, const char *message, const char *file, int line)>;
     static AssertHandler _handlerRenderer = DefaultHandler;
     static AssertHandler _handlerEngine = DefaultHandler;
 
-    void SetAssertHandlerEnsure(AssertHandler & handler) {
-        _handlerRenderer = handler;
-    }
+    void SetAssertHandlerEnsure(AssertHandler &handler);
 
-    void SetAssertHandlerCheck(AssertHandler & handler) {
-        _handlerEngine = handler;
-    }
+    void SetAssertHandlerCheck(AssertHandler &handler);
 
-    void TriggerAssertEnsure(const char *condition, const char *message, const char *file, int line) {
-        _handlerRenderer(condition, message, file, line);
-    }
-    void TriggerAssertCheck(const char *condition, const char *message, const char *file, int line) {
-        _handlerEngine(condition, message, file, line);
-    }
+    void TriggerAssertEnsure(const char *condition, const char *message, const char *file, int line);
+
+    void TriggerAssertCheck(const char *condition, const char *message, const char *file, int line);
 
 
 #define TH_ENSURE(cond, msg)\
