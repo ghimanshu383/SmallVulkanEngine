@@ -51,6 +51,13 @@ add_library(${RENDERER} STATIC
         src/pbr/PbrTexture.cpp
         include/foundation/core_platform.h
         include/foundation/core_assert.h
+        include/foundation/core_memory.h
+        include/foundation/core_linear_allocator.h
+        src/foundation/core_linear_allocator.cpp
+        include/foundation/core_heap_allocator.h
+        src/foundation/core_heap_allocator.cpp
+        include/foundation/core_memory_service.h
+        src/foundation/core_memory_service.cpp
 )
 
 target_include_directories(${RENDERER} PUBLIC

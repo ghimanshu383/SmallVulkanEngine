@@ -106,6 +106,14 @@ namespace rn {
         uint32_t clickY;
     };
 
+    struct MemoryAllocator {
+        virtual ~MemoryAllocator() = default;
+
+        virtual void *allocate(size_t size, size_t align) = 0;
+
+        virtual void deallocate(void *ptr) = 0;
+    };
+
     struct RendererContext {
         size_t swapChainImageCount;
         VkPhysicalDevice physicalDevice;

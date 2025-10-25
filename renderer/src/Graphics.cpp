@@ -1685,7 +1685,7 @@ namespace rn {
 
         mDynamicBuffers.resize(mSwapChainImageViews.size());
         mDynamicBufferMemory.resize(mSwapChainImageViews.size());
-        VkDeviceSize dynamicBufferSize = sizeof(ModelUBO) * Utility::MAX_OBJECTS;
+        VkDeviceSize dynamicBufferSize = mModelMinAlignment * Utility::MAX_OBJECTS;
 
         for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
             std::string viewProjectionBufferName = "View Projection Buffer";
