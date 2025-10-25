@@ -17,7 +17,7 @@ namespace vk {
     };
     struct Log {
         LogType type{};
-        const char *message{};
+        std::string message{};
         std::chrono::system_clock::time_point timeStamp = std::chrono::system_clock::now();
     };
 

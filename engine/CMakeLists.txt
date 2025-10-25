@@ -32,6 +32,7 @@ add_executable(${ENGINE}
         include/Core/GizmoController.h
         include/Entity/PointLight.h
         src/Entity/PointLight.cpp
+        include/Core/th_util.h
 )
 
 target_include_directories(${ENGINE} PUBLIC

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "foundation/core_platform.h"
 #include <vulkan/vulkan.h>
 #include "GLFW/glfw3.h"
 #include <iostream>

@@ -62,7 +62,7 @@ namespace vk {
                     break;
             }
 
-            ImGui::TextColored(color, "[%s] : %s", timeBuff, log.message);
+            ImGui::TextColored(color, "[%s] : %s", timeBuff, log.message.c_str());
         }
         ImGui::End();
     }

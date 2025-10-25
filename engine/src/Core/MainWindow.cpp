@@ -4,6 +4,7 @@
 
 #include <Core/ImguiEditor.h>
 #include <Entity/PointLight.h>
+#include <Core/th_util.h>
 #include "Core/MainWindow.h"
 #include "Utility.h"
 #include "Components/MeshComponent.h"
@@ -200,6 +201,6 @@ namespace vk {
 
 
         mDefaultScene->BeginPlay();
-        Logger::GetInstance()->WriteLog({LogType::WARN, "The Scene is now set and Render is starting"});
+        TH_LOG_WARN("The Scene is now set and Render is starting");
     }
 }

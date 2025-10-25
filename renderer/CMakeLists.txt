@@ -49,6 +49,8 @@ add_library(${RENDERER} STATIC
         src/pbr/PbrImpl.cpp
         include/pbr/PbrTexture.h
         src/pbr/PbrTexture.cpp
+        include/foundation/core_platform.h
+        include/foundation/core_assert.h
 )
 
 target_include_directories(${RENDERER} PUBLIC
